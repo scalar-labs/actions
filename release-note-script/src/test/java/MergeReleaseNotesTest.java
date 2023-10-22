@@ -52,7 +52,7 @@ public class MergeReleaseNotesTest {
         new File(
             Objects.requireNonNull(this.getClass().getClassLoader().getResource(fileName))
                 .getFile());
-    sut.load(edition, repository, file);
+    sut.load(file, edition, repository);
   }
 
   String loadExpectedReleaseNote(String fileName) throws Exception {

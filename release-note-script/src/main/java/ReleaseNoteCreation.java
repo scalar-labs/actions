@@ -26,6 +26,9 @@ import java.util.regex.Pattern;
 public class ReleaseNoteCreation {
 
   private static final String DEBUG = System.getenv("DEBUG");
+  private static final Pattern PATTERN_RELEASE_NOTE_TEXT = Pattern.compile("^ *-? *(\\p{Print}+)$");
+  private static final Pattern PATTERN_SAME_AS_TEXT =
+      Pattern.compile("^ *-? *[Ss]ame ?[Aa]s +#?([0-9]+) *$");
 
   private final GitHubContext ghContext;
 
@@ -76,53 +79,61 @@ public class ReleaseNoteCreation {
   void extractReleaseNoteInfo(String prNumber) throws Exception {
     if (!ghContext.isPullRequestMerged(prNumber)) return;
 
-    ReleaseNoteText releaseNoteText = new ReleaseNoteText();
     Category category = ghContext.getCategoryFromPullRequest(prNumber);
-
     BufferedReader br = ghContext.getPullRequestBody(prNumber);
 
     String line;
     while ((line = br.readLine()) != null) {
       if (Pattern.matches("^## *[Rr]elease *[Nn]otes? *", line)) {
-        releaseNoteText.category = category;
-        releaseNoteText.prNumbers.add(prNumber);
-
-        while ((line = br.readLine()) != null) {
-          if (Pattern.matches("^## *.*", line))
-            break; // Reached to the next section header (ended release note section)
-          if (Pattern.matches("^ *-? *N/?A *$", line)) return; // This PR is not user-facing
-
-          Matcher m =
-              Pattern.compile("^ *-? *(\\p{Print}+)$").matcher(line); // Extract Release note text
-          if (m.matches()) {
-            if (!Pattern.matches("^ *-? *[Ss]ame ?[Aa]s +#?([0-9]+) *$", line)) {
-              String matched = m.group(1);
-              if (DEBUG != null) System.err.printf("matched: %s%n", matched);
-              releaseNoteText.text = m.group(1);
-            }
-          }
-
-          m =
-              Pattern.compile("^ *-? *[Ss]ame ?[Aa]s +#?([0-9]+) *$")
-                  .matcher(line); // It has a related PR
-          if (m.matches()) {
-            String topicPrNumber = m.group(1);
-            if (DEBUG != null)
-              System.err.printf(
-                  "PR:%s sameAs:%s%n", releaseNoteText.prNumbers.get(0), topicPrNumber);
-            List<ReleaseNoteText> relatedPrs =
-                sameAsItems.computeIfAbsent(topicPrNumber, k -> new ArrayList<>());
-            relatedPrs.add(releaseNoteText);
-            sameAsItems.put(topicPrNumber, relatedPrs);
-          }
-        }
-        categorizeReleaseNoteText(releaseNoteText);
+        break;
       }
+    }
+
+    ReleaseNoteText releaseNoteText = extractReleaseNoteText(category, prNumber, br);
+    if (releaseNoteText != null) {
+      categorizeReleaseNoteText(releaseNoteText);
     }
   }
 
+  private ReleaseNoteText extractReleaseNoteText(
+      Category category, String prNumber, BufferedReader br) throws Exception {
+    ReleaseNoteText releaseNoteText = new ReleaseNoteText();
+    releaseNoteText.category = category;
+    releaseNoteText.prNumbers.add(prNumber);
+
+    String line;
+    while ((line = br.readLine()) != null) {
+      if (Pattern.matches("^## *.*", line))
+        break; // Reached to the next section header (ended release note section)
+      if (Pattern.matches("^ *-? *N/?A *$", line)) return null; // This PR is not user-facing
+
+      Matcher releseNoteTextMatcher =
+          PATTERN_RELEASE_NOTE_TEXT.matcher(line); // Extract Release note text
+      if (releseNoteTextMatcher.matches()) {
+        if (!Pattern.matches("^ *-? *[Ss]ame ?[Aa]s +#?([0-9]+) *$", line)) {
+          String matched = releseNoteTextMatcher.group(1);
+          if (DEBUG != null) System.err.printf("matched: %s%n", matched);
+          releaseNoteText.text = releseNoteTextMatcher.group(1);
+        }
+      }
+
+      Matcher sameAsTextMatcher = PATTERN_SAME_AS_TEXT.matcher(line); // It has a related PR
+      if (sameAsTextMatcher.matches()) {
+        String topicPrNumber = sameAsTextMatcher.group(1);
+        if (DEBUG != null)
+          System.err.printf("PR:%s sameAs:%s%n", releaseNoteText.prNumbers.get(0), topicPrNumber);
+        List<ReleaseNoteText> relatedPrs =
+            sameAsItems.computeIfAbsent(topicPrNumber, k -> new ArrayList<>());
+        relatedPrs.add(releaseNoteText);
+        sameAsItems.put(topicPrNumber, relatedPrs);
+      }
+    }
+
+    return releaseNoteText;
+  }
+
   private void categorizeReleaseNoteText(ReleaseNoteText rnText) {
-    checkReleaseNoteCategory(rnText);
+    setMiscellaneousCategoryIfCategoryIsNull(rnText);
     Arrays.stream(Category.values())
         .forEach(
             category -> {
@@ -192,7 +203,7 @@ public class ReleaseNoteCreation {
     return builder.toString();
   }
 
-  private void checkReleaseNoteCategory(ReleaseNoteText rnText) {
+  private void setMiscellaneousCategoryIfCategoryIsNull(ReleaseNoteText rnText) {
     if (rnText.category == null) {
       rnText.category = Category.MISCELLANEOUS;
     }
@@ -219,9 +230,9 @@ public class ReleaseNoteCreation {
       return this.displayName;
     }
 
-    public static Category getByName(String name) {
+    public static Category fromDisplayName(String name) {
       return Arrays.stream(Category.values())
-          .filter(v -> v.name().equalsIgnoreCase(name))
+          .filter(v -> v.getDisplayName().equalsIgnoreCase(name))
           .findFirst()
           .orElseThrow(() -> new IllegalArgumentException("Invalid name: " + name));
     }
@@ -249,7 +260,7 @@ public class ReleaseNoteCreation {
       this.repository = repository;
     }
 
-    public String getProjectId() throws Exception {
+    private String getProjectId() throws Exception {
       BufferedReader br =
           runSubProcessAndGetOutputAsReader(
               format(
@@ -261,7 +272,7 @@ public class ReleaseNoteCreation {
       return line;
     }
 
-    public List<String> getPullRequestNumbers(String projectId) throws Exception {
+    private List<String> getPullRequestNumbers(String projectId) throws Exception {
       BufferedReader br =
           runSubProcessAndGetOutputAsReader(
               format(
@@ -285,16 +296,16 @@ public class ReleaseNoteCreation {
                   prNumber, this.owner, this.repository));
 
       String line = br.readLine(); // Assuming only one line exists.
-      if (line == null) throw new RuntimeException("Couldn't get the projectId");
+      if (line == null) throw new RuntimeException("Couldn't get the project state");
       return line;
     }
 
-    public boolean isPullRequestMerged(String prNumber) throws Exception {
+    boolean isPullRequestMerged(String prNumber) throws Exception {
       String state = getPullRequestState(prNumber);
       return MERGED_STATE.equalsIgnoreCase(state);
     }
 
-    public Category getCategoryFromPullRequest(String prNumber) throws Exception {
+    Category getCategoryFromPullRequest(String prNumber) throws Exception {
       BufferedReader br =
           runSubProcessAndGetOutputAsReader(
               format(
@@ -303,13 +314,12 @@ public class ReleaseNoteCreation {
 
       String line;
       while ((line = br.readLine()) != null) {
-        if (isValidCategory(line)) break;
+        if (isValidCategory(line)) return Category.fromDisplayName(line);
       }
-      if (line == null || line.isEmpty()) line = Category.MISCELLANEOUS.name();
-      return Category.getByName(line);
+      return Category.MISCELLANEOUS;
     }
 
-    public BufferedReader getPullRequestBody(String prNumber) throws Exception {
+    BufferedReader getPullRequestBody(String prNumber) throws Exception {
       return runSubProcessAndGetOutputAsReader(
           format(
               "gh pr view %s --repo %s/%s --jq \".body\" --json body",
