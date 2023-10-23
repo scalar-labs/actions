@@ -45,6 +45,11 @@ public class ReleaseNoteCreation {
       System.exit(1);
     }
 
+    /*
+    This script is assumed to run on the GitHub Actions workflow and the
+    parameters are passed in the workflow automatically. Therefore, the
+    validation for the arguments is omitted.
+    */
     String owner = args[0];
     String projectTitlePrefix = args[1];
     String version = args[2];
