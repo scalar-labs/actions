@@ -7,7 +7,7 @@ These are scripts for generating the main body of release notes for Scalar produ
 
 These scripts are invoked in GitHub Actions workflows when releasing a new version of Scalar products. 
 
-For the details of the release note please see [General rules]().
+For the details of the release note please see [General rules](https://developers.scalar-labs.com/docs/style-guide/release-notes/).
 
 ## Prerequisites
 
@@ -25,7 +25,7 @@ So usually you don't need to execute the scripts manually.
 To run the script:
 
 ```shell
-java --source 11 ReleaseNoteCreation.java <owner> <projectTitlePrefix> <version> <repository>
+java ReleaseNoteCreation.java <owner> <projectTitlePrefix> <version> <repository>
 ```
 
 Here, the arguments mean the following:
@@ -40,21 +40,21 @@ Here, the arguments mean the following:
 Example: To create the release note for ScalarDB 4.0.0
 
 ```shell
-java --source 11 ReleaseNoteCreation.java scalar-labs ScalarDB 4.0.0 scalardb
+java ReleaseNoteCreation.java scalar-labs ScalarDB 4.0.0 scalardb
 ```
 
-The result will be output in markdown format to the standard output.
+The result will be output in a Markdown format to the standard output.
 
 ### Create a Merged Release Note for ScalarDB
 
 *Assuming the use of Java 11*
 
-Before running this script, make sure you have the release note bodies for ScalarDB, ScalarDB Cluster, ScalarDB GraphQL, and ScalarDB SQL as markdown files in the current directory.
+Before running this script, make sure you have the release note bodies for ScalarDB, ScalarDB Cluster, ScalarDB GraphQL, and ScalarDB SQL as Markdown files for `scalardb.md`, `cluster.md`, `graphql.md`, `sql.md` respectively in the same directory.
 
 To run the script:
 
 ```shell
-java --source 11 MergeReleaseNotes.java scalardb.md cluster.md graphql.md sql.md
+java MergeReleaseNotes.java
 ```
 
-The result will be output in markdown format to the standard output.
+The result will be output in a Markdown format to the standard output.

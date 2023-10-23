@@ -38,8 +38,8 @@ public class ReleaseNoteCreation {
   public static void main(String... args) throws Exception {
     if (args.length != 4) {
       System.err.printf(
-          "Usage:%n    java --source 11 %s.java <owner> <projectTitlePrefix> <version>"
-              + " <repository>%n%nExample:%n    java --source 11 %s.java scalar-labs ScalarDB 4.0.0"
+          "Usage:%n    java %s.java <owner> <projectTitlePrefix> <version>"
+              + " <repository>%n%nExample:%n    java %s.java scalar-labs ScalarDB 4.0.0"
               + " scalardb%n",
           ReleaseNoteCreation.class.getSimpleName(), ReleaseNoteCreation.class.getSimpleName());
       System.exit(1);

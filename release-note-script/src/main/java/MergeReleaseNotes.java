@@ -38,7 +38,7 @@ public class MergeReleaseNotes {
   public static void main(String... args) throws Exception {
     if (args.length == 0) {
       System.err.printf(
-          "Usage: java --source 11 %s.java scalardb.md cluster.md graphql.md sql.md%n",
+          "Usage: java %s.java scalardb.md cluster.md graphql.md sql.md%n",
           MergeReleaseNotes.class.getSimpleName());
     }
 
