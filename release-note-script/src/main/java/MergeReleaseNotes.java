@@ -151,6 +151,15 @@ public class MergeReleaseNotes {
             repository -> {
               List<ReleaseNote> releaseNotes = repositoryMap.get(repository);
               if (releaseNotes != null && !releaseNotes.isEmpty()) {
+                /*
+                 The merged release note body consists of community edition part and
+                 enterprise edition part. The community edition part represents
+                 ScalarDB's release note body, meanwhile the enterprise edition
+                 represents the rest of repositories release note body. The enterprise
+                 edition part shows repository information (ScalarDB Cluster, ScalarDB
+                 GraphQL, ScalarDB SQL) under each category section. Thus, the h4 header
+                 is needed for the repositories in the enterprise edition.
+                */
                 if (!repository.equals(Repository.DB))
                   System.out.printf("#### %s%n", repository.getDisplayName());
                 for (ReleaseNote rn : releaseNotes) {
