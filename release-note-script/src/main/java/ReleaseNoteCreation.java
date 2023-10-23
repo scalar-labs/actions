@@ -232,7 +232,7 @@ public class ReleaseNoteCreation {
 
     public static Category fromDisplayName(String name) {
       return Arrays.stream(Category.values())
-          .filter(v -> v.getDisplayName().equalsIgnoreCase(name))
+          .filter(v -> v.name().equalsIgnoreCase(name))
           .findFirst()
           .orElseThrow(() -> new IllegalArgumentException("Invalid name: " + name));
     }
