@@ -38,7 +38,7 @@ public class MergeReleaseNotes {
   public static void main(String... args) throws Exception {
 
     if (args.length > 0) {
-      if (args[0].equalsIgnoreCase("-h") || args[0].equalsIgnoreCase("--help")) {
+      if (args[0].equals("-h") || args[0].equals("--help")) {
         System.err.printf("Usage: java %s.java%n", MergeReleaseNotes.class.getSimpleName());
         System.exit(0);
       }
