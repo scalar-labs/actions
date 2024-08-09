@@ -6,10 +6,7 @@ on:
       project_base_name:
         required: true
         type: string
-        description: 'The base name of the project used in the repository. For example, "ScalarDB" if projects are named "ScalarDB <version>"'
-    secrets:
-      token:
-        required: true
+        description: 'The base name of the projects used in the repository. For example, "ScalarDB" if projects are named "ScalarDB <version>"'
 
 env:
   TERM: dumb
@@ -18,8 +15,7 @@ jobs:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     env:
-#      GH_TOKEN: ${{ secrets.GH_PR_PAT }}
-      GH_TOKEN: ${{ secrets.token }}
+      GH_TOKEN: ${{ secrets.GH_PR_PAT }}
       # Escape the PR title. See https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions#using-an-intermediate-environment-variable for details
       PR_TITLE: ${{ github.event.pull_request.title }}
     steps:
@@ -28,7 +24,7 @@ jobs:
         with:
           repository: scalar-labs/actions
           sparse-checkout: auto-pr-script
-          ref: add-auto-pr
+          ref: main
           path: auto-pr
 
       - name: Checkout the target repository
@@ -37,7 +33,7 @@ jobs:
           # This is necessary to avoid unexpected auto-merge in git cherry-pick
           fetch-depth: 0
           # This is necessary for git-push
-          token: ${{ secrets.token }}
+          token: ${{ secrets.GH_PR_PAT  }}
           path: repo
 
       - name: Create pull requests
