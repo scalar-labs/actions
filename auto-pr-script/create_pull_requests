@@ -51,16 +51,16 @@ function cherry_pick_and_create_pull_request () {
 		# If the cherry-pick succeeds, creates the backport PR with it
 		git push origin $new_branch
 		git status
-		pr_body=$(get_successfull_backport_pr_body pr_body $branch)
+		pr_body=$(get_successfull_backport_pr_body)
 		create_pr $branch "${pr_body}"
 	else
-		# If the cherry-pick fails, creates backport PR draft containing an empty commit
-	 git cherry-pick --abort
-	 git commit --allow-empty -m "Empty commit [skip ci]"
-	 git push origin $new_branch
-	 git status
-	 pr_body=$(get_failed_backport_pr_body $branch)
-	 create_pr $branch "${pr_body}" --draft
+		# If the cherry-pick fails, creates the backport PR draft containing an empty commit
+		git cherry-pick --abort
+		git commit --allow-empty -m "Empty commit [skip ci]"
+		git push origin $new_branch
+		git status
+		pr_body=$(get_failed_backport_pr_body)
+		create_pr $branch "${pr_body}" --draft
 	fi
 }
 
@@ -79,8 +79,7 @@ function create_pr(){
 }
 
 function get_successfull_backport_pr_body() {
-	local branch=$1
-
+	#The following heredoc syntax between the END delimiters requires to use tab indentation. Space indentation will result in a runtime error.
 	body=$(cat <<-END
 	This is an automated backport of the following:
 
@@ -95,8 +94,7 @@ function get_successfull_backport_pr_body() {
 }
 
 function get_failed_backport_pr_body() {
-	local branch=$1
-
+	#The following heredoc syntax between the END delimiters requires to use tab indentation. Space indentation will result in a runtime error.
 	body=$(cat <<-END
 	This is an automated request for a manual backport of the following:
 
