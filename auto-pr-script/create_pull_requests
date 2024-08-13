@@ -83,10 +83,10 @@ function get_successfull_backport_pr_body() {
 	body=$(cat <<-END
 	This is an automated backport of the following:
 
-	- Original PR: $pull_request_url
-	- Backported commit: $commit_sha
+	- **Original PR:** $pull_request_url
+	- **Backported commit:** $commit_sha
 
-	Please merge the PR once all checks have passed.
+	Please merge this PR after all checks have passed.
 	END
 	)
 
@@ -98,10 +98,10 @@ function get_failed_backport_pr_body() {
 	body=$(cat <<-END
 	This is an automated request for a manual backport of the following:
 
-	- Original PR: $pull_request_url
-	- Commit to backport: $commit_sha
+	- **Original PR:** $pull_request_url
+	- **Commit to backport:** $commit_sha
 
-	1. Resolve resolve any conflicts that arise during the cherry-pick process.
+	1. Resolve any conflicts that occur during the cherry-picking process.
 
 	\`\`\`console
 	git fetch origin &&
@@ -110,7 +110,7 @@ function get_failed_backport_pr_body() {
 	\`\`\`
 
 	2. Push the changes.
-	3. Merge the PR once all checks have passed.
+	3. Merge this PR after all checks have passed.
 
 	Thank you!
 	END
