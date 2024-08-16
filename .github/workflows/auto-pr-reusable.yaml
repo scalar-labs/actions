@@ -33,7 +33,7 @@ jobs:
           # This is necessary to avoid unexpected auto-merge in git cherry-pick
           fetch-depth: 0
           # This is necessary for git-push
-          token: ${{ secrets.GH_PR_PAT  }}
+          token: ${{ secrets.GH_PR_PAT }}
           path: repo
 
       - name: Create pull requests
@@ -58,7 +58,9 @@ jobs:
           echo "$versions"
           echo -------------
           
-          branches=$($SCRIPT_PATH/conv_proj_version_to_branch $versions)
+          default_branch=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name')
+          
+          branches=$($SCRIPT_PATH/conv_proj_version_to_branch $default_branch $versions)
           # Remove the base branch from the list because the target change is already merged to the branch.
           branches=$(echo "$branches" | sed "/^${{ github.base_ref }}$/d")
           echo -------------
