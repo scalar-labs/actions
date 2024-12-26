@@ -60,7 +60,7 @@ jobs:
           
           default_branch=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name')
           
-          branches=$(bash -x $SCRIPT_PATH/conv_proj_version_to_branch $default_branch $versions)
+          branches=$($SCRIPT_PATH/conv_proj_version_to_branch $default_branch $versions)
           # Remove the base branch from the list because the target change is already merged to the branch.
           branches=$(echo "$branches" | sed "/^${{ github.base_ref }}$/d")
           echo -------------
