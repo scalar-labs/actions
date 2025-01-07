@@ -27,7 +27,7 @@ function main(){
 	git fetch origin
 
 	# Create PRs based on the target support branches and release branches
-	for branch in "${branches[@]}"; do
+	for branch in ${branches[@]}; do
 		new_branch="$branch-pull-$pull_request_id"
 
 		# Create a new temp branch, push it and create a PR for the change.
