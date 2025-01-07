@@ -24,7 +24,7 @@ jobs:
         with:
           repository: scalar-labs/actions
           sparse-checkout: auto-pr-script
-          ref: main
+          ref: debug_auto_pr
           path: auto-pr
 
       - name: Checkout the target repository
