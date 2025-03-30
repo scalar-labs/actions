@@ -105,6 +105,6 @@ else
 fi
 
 # Cleanup
-creanUp $WORK_DIR $OWNER $REPO $PROJ_NUMBER
+cleanUp $WORK_DIR $OWNER $REPO $PROJ_NUMBER
 
 exit $RET

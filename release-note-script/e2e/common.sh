@@ -132,7 +132,7 @@ function deleteProject() {
     gh project delete "$project" --owner "$owner" >/dev/null
 }
 
-function creanUp() {
+function cleanUp() {
     local workDir=$1
     local owner=$2
     local repo=$3
