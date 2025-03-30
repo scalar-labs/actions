@@ -17,7 +17,7 @@ export GH_TOKEN=$PAT
 
 #### Test execution
 
-CURRENT_DIR=$(pwd)
+CURRENT_DIR=$(dirname 0)
 createWorkDir
 cd $WORK_DIR
 

@@ -8,7 +8,6 @@ FIXTURE_DIR=$E2E_ROOT/fixture
 
 # Functions
 function usage() {
-    local PRG=$0
 cat <<EOF
 Usage: $0 <owner> <repository> <projectPrefix> <version> <PAT>
 
