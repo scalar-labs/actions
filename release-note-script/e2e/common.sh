@@ -1,6 +1,6 @@
 # Constants
 E2E_ROOT=$(pwd)
-WORK_DIR=/tmp/rn-e2e-$(date "+%Y%m%d%H%M%S")
+WORK_DIR=$(mktemp -d "/tmp/rn-e2e-XXXXXX")
 PR_DIR=$WORK_DIR/pr
 SCRIPT_DIR=$(dirname $E2E_ROOT)/src/main/java
 RN_SCRIPT=$SCRIPT_DIR/ReleaseNoteCreation.java
@@ -18,12 +18,6 @@ Example:
 This tool creates a project and repo on the GitHub. So please do not use with the product repository and organization.
 EOF
     exit 1
-}
-
-function createWorkDir() {
-    if [ ! -d $WORK_DIR ];then
-        mkdir -p $WORK_DIR
-    fi
 }
 
 function createProject() {

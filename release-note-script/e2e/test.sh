@@ -18,7 +18,7 @@ export GH_TOKEN=$PAT
 #### Test execution
 
 CURRENT_DIR=$(dirname 0)
-createWorkDir
+# createWorkDir
 cd $WORK_DIR
 
 # Create a project.
