@@ -291,8 +291,7 @@ public class ReleaseNoteCreation {
       BufferedReader br =
           runSubProcessAndGetOutputAsReader(
               format(
-                  "gh project list --owner %s --closed | awk '/%s/ {print}' | awk '/%s/ {print"
-                      + " $1}'",
+                  "gh project list --owner %s --closed | awk '/%s/ {print}' | awk '/%s/ {print $1}'",
                   this.owner, this.projectTitlePrefix, getVersion()));
 
       String line = br.readLine(); // Assuming only one line exists.
