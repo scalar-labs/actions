@@ -40,7 +40,7 @@ function createLabels() {
 
     for label in $(echo $labels)
     do
-        gh label create "$label" --repo $owner/$repo >/dev/null 2>&1
+        gh label create "$label" --repo $owner/$repo >/dev/null
     done
 }
 

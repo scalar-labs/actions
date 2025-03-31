@@ -25,7 +25,7 @@ cd $WORK_DIR
 PROJ_NUMBER=$(createProject "$OWNER" "$PROJ_PREFIX $PROJ_VERSION")
 
 if [ ! -d $PR_DIR ];then
-    mkdir -p $PR_DIR >/dev/null 2>&1
+    mkdir -p $PR_DIR >/dev/null
 fi
 
 # Create a repository.
@@ -96,7 +96,7 @@ if [ $RET != 0 ];then
     echo -e "\033[31m[NG]\033[0m Failed to execute the release note script"
 fi
 
-diff $WORK_DIR/rnbody.md $FIXTURE_DIR/expected/normal.md >/dev/null 2>&1
+diff $WORK_DIR/rnbody.md $FIXTURE_DIR/expected/normal.md >/dev/null
 RET=$?
 if [ $RET != 0 ];then
     echo -e "\033[31m[NG]\033[0m the release note body doesn't match the expected one."
