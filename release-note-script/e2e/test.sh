@@ -96,7 +96,7 @@ if [ $RET != 0 ];then
     echo -e "\033[31m[NG]\033[0m Failed to execute the release note script"
 fi
 
-diff $WORK_DIR/rnbody.md $FIXTURE_DIR/expected/normal.md >/dev/null
+diff $WORK_DIR/rnbody.md $FIXTURE_DIR/expected/normal.md
 RET=$?
 if [ $RET != 0 ];then
     echo -e "\033[31m[NG]\033[0m the release note body doesn't match the expected one."

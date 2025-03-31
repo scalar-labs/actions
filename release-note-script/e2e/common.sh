@@ -40,7 +40,7 @@ function createLabels() {
 
     for label in $(echo $labels)
     do
-        gh label create "$label" --repo $owner/$repo >/dev/null
+        gh label create "$label" --repo $owner/$repo
     done
 }
 
@@ -49,14 +49,14 @@ function createMainBranch() {
     git add README
     git commit -m "first commit"
     git branch -M main
-    git push -u origin main >/dev/null
+    git push -u origin main
 }
 
 function createBranchAndCommit() {
     local branch=$1
 
     git checkout main
-    git checkout -b $branch >/dev/null
+    git checkout -b $branch
 
 cat<<EOF > $branch
 $branch
@@ -64,7 +64,7 @@ EOF
 
     git add $branch
     git commit -m "$branch"
-    git push -u origin $branch >/dev/null
+    git push -u origin $branch
 }
 
 function createPRWithReleaseNote() {
@@ -115,21 +115,21 @@ function mergePullRequest() {
     local owner=$2
     local repo=$3
 
-    gh pr merge $prNum --squash --repo $owner/$repo >/dev/null
+    gh pr merge $prNum --squash --repo $owner/$repo
 }
 
 function deleteRepo() {
     local owner=$1
     local repo=$2
 
-    gh repo delete $owner/$repo --yes >/dev/null
+    gh repo delete $owner/$repo --yes
 }
 
 function deleteProject() {
     local owner=$1
     local project=$2
 
-    gh project delete "$project" --owner "$owner" >/dev/null
+    gh project delete "$project" --owner "$owner"
 }
 
 function cleanUp() {
