@@ -4,6 +4,7 @@ source ./common.sh
 
 if [ $# != 5 ];then
     usage
+    exit 1
 fi
 
 OWNER=$1
@@ -14,7 +15,6 @@ PAT=$5
 
 export GH_TOKEN=$PAT
 
-
 #### Test execution
 
 CURRENT_DIR=$(dirname 0)
@@ -24,8 +24,11 @@ cd $WORK_DIR
 # Create a project.
 PROJ_NUMBER=$(createProject "$OWNER" "$PROJ_PREFIX $PROJ_VERSION")
 
+# Trap EXIT to clean up the temporary resources when this script end.
+trap 'cleanUp $WORK_DIR $OWNER $REPO $PROJ_NUMBER' EXIT
+
 if [ ! -d $PR_DIR ];then
-    mkdir -p $PR_DIR >/dev/null
+    mkdir -p $PR_DIR
 fi
 
 # Create a repository.
@@ -103,8 +106,3 @@ if [ $RET != 0 ];then
 else
     echo -e "\033[32m[OK]\033[0m"
 fi
-
-# Cleanup
-cleanUp $WORK_DIR $OWNER $REPO $PROJ_NUMBER
-
-exit $RET

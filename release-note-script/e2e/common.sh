@@ -138,7 +138,11 @@ function cleanUp() {
     local repo=$3
     local projNum=$4
 
-    rm -rf $workDir
+    if [ -d "$workDir" ]
+    then
+        rm -rf $workDir;
+        echo "Deleted working directory: $workDir"
+    fi
     deleteRepo $owner $repo
     deleteProject $owner $projNum
 }
