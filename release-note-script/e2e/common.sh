@@ -1,8 +1,8 @@
 # Constants
-E2E_ROOT=$(pwd)
+E2E_ROOT=$(realpath $(dirname $0))
 WORK_DIR=$(mktemp -d "/tmp/rn-e2e-XXXXXX")
 PR_DIR=$WORK_DIR/pr
-SCRIPT_DIR=$(dirname $E2E_ROOT)/src/main/java
+SCRIPT_DIR=$E2E_ROOT/../src/main/java
 RN_SCRIPT=$SCRIPT_DIR/ReleaseNoteCreation.java
 FIXTURE_DIR=$E2E_ROOT/fixture
 

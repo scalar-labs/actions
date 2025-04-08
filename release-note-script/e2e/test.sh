@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source ./common.sh
+source $(dirname $0)/common.sh
 
 if [ $# != 5 ];then
     usage
@@ -17,7 +17,8 @@ export GH_TOKEN=$PAT
 
 #### Test execution
 
-CURRENT_DIR=$(dirname 0)
+CURRENT_DIR=$(pwd)
+
 # createWorkDir
 cd $WORK_DIR
 
