@@ -104,16 +104,18 @@ jobs:
 
       - name: Save Docker images
         run: |
-          docker image ls
-          images=`echo '${{ inputs.images }}' | jq -r '[.[] | "ghcr.io/scalar-labs/" + .[1] + ":${{ steps.version.outputs.version }}"] | join(" ")'`
-          echo "Images to save: $images"
-          docker save $images -o docker-images.tar
+          mkdir -p images_output
+          for label in $(echo '${{ inputs.images }}' | jq -r .[][1])
+          do
+              image="ghcr.io/scalar-labs/${label}:${{ steps.version.outputs.version }}"
+              docker save $image | gzip > images_output/${label}.tar.gz
+          done
 
       - name: Upload images as artifact
         uses: actions/upload-artifact@v4
         with:
           name: docker-images
-          path: docker-images.tar
+          path: images_output
 
   vuln-check:
     runs-on: ubuntu-latest
@@ -145,8 +147,8 @@ jobs:
         with:
           name: docker-images
 
-      - name: Load Docker images
-        run: docker load -i docker-images.tar
+      - name: Load Docker image
+        run: docker load -i ${{ matrix.image[1] }}.tar.gz
 
       - name: Run Trivy vulnerability scanner for ${{ matrix.image[0] }}
         uses: aquasecurity/trivy-action@master
