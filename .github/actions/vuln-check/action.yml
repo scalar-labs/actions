@@ -25,7 +25,7 @@ runs:
 
     - name: Post Trivy vulnerability check failure for ${{ inputs.image-ref }}
       if: failure() && inputs.slack-webhook-url
-      uses: slackapi/slack-github-action@v2.0.0
+      uses: slackapi/slack-github-action@v2.1.0
       with:
         webhook: ${{ inputs.slack-webhook-url }}
         webhook-type: incoming-webhook
