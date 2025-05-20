@@ -116,6 +116,7 @@ jobs:
         with:
           name: docker-images
           path: images_output
+          retention-days: 1
 
   vuln-check:
     runs-on: ubuntu-latest
