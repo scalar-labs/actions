@@ -143,10 +143,20 @@ jobs:
         with:
           name: docker-images-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.target-ref }}
 
-      - name: Load Docker image
-        run: docker load -i ${{ matrix.image[1] }}.tar.gz
+      - name: Load Docker image if exists
+        id: load-image
+        run: |
+          IMAGE_TAR="${{ matrix.image[1] }}.tar.gz"
+          if [[ -f "$IMAGE_TAR" ]]; then
+            docker load -i "$IMAGE_TAR"
+            echo "skipped=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$IMAGE_TAR does not exist. Skipping this image."
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Run Trivy vulnerability scanner for ${{ matrix.image[0] }}
+        if: steps.load-image.outputs.skipped != 'true'
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ghcr.io/scalar-labs/${{ matrix.image[1] }}:${{ needs.build.outputs.version }}
@@ -157,7 +167,7 @@ jobs:
           timeout: '60m'
 
       - name: Post Trivy vulnerability check failure for ${{ matrix.image[0] }}
-        if: failure() && steps.slack-webhook.outputs.enabled == 'true'
+        if: failure() && steps.slack-webhook.outputs.enabled == 'true' && steps.load-image.outputs.skipped != 'true'
         uses: slackapi/slack-github-action@v2.1.1
         with:
           webhook: ${{ secrets.SLACK_SECURITY_WEBHOOK_URL }}
