@@ -103,7 +103,13 @@ jobs:
           for label in $(echo '${{ inputs.images }}' | jq -r .[][1])
           do
               image="ghcr.io/scalar-labs/${label}:${{ steps.version.outputs.version }}"
-              docker save $image | gzip > images_output/${label}.tar.gz
+
+              if docker image inspect "$image" > /dev/null 2>&1; then
+                  docker save "$image" | gzip > "images_output/${label}.tar.gz"
+                  echo "Saved $image"
+              else
+                  echo "Image $image not found. Skipping."
+              fi
           done
 
       - name: Upload images as artifact
