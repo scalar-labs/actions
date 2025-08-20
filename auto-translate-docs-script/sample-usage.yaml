@@ -18,7 +18,7 @@ on:
 
 jobs:
   translate-docs:
-    uses: scalar-labs/actions/.github/workflows/auto-translate-documentation-reusable.yml@main
+    uses: scalar-labs/actions/.github/workflows/auto-translate-docs-reusable.yml@main
     with:
       pr_number: ${{ inputs.pr_number || '' }}
     secrets:
