@@ -18,6 +18,8 @@ on:
 
 jobs:
   translate-docs:
+    # Only run if the PR was merged (not just closed)
+    if: github.event.pull_request.merged == true
     uses: scalar-labs/actions/.github/workflows/auto-translate-docs-reusable.yml@main
     with:
       pr_number: ${{ inputs.pr_number || '' }}
