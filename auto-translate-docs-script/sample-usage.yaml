@@ -1,0 +1,27 @@
+# Sample usage for auto-translate documentation by using Claude Code Action
+# The following approach is a reusable workflow that calls the centralized workflow file (.github/workflows/auto-translate-docs-reusable.yml) in the scalar-labs/actions from any repository.
+# NOTE: Name this file ".github/workflows/auto-translate-docs.yml"
+
+name: Auto-translate documentation (ja-jp)
+on:
+  pull_request:
+    types: [closed]
+    paths:
+      - "docs/en-us/**/*.mdx"
+      - "docs/en-us/**/*.md"
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to translate. (Optional: If not specified, the most recent commit that contains docs in "docs/en-us/" will be translated.)'
+        required: false
+        type: string
+
+jobs:
+  translate-docs:
+    # Only run if the PR was merged (not just closed) OR if the workflow was manually triggered
+    if: ${{ github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch' }}
+    uses: scalar-labs/actions/.github/workflows/auto-translate-docs-reusable.yml@main
+    with:
+      pr_number: ${{ inputs.pr_number || '' }}
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
