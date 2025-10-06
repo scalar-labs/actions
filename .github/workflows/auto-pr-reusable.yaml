@@ -20,7 +20,7 @@ jobs:
       PR_TITLE: ${{ github.event.pull_request.title }}
     steps:
       - name: Checkout auto-pr scripts
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: scalar-labs/actions
           sparse-checkout: auto-pr-script
@@ -28,7 +28,7 @@ jobs:
           path: auto-pr
 
       - name: Checkout the target repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # This is necessary to avoid unexpected auto-merge in git cherry-pick
           fetch-depth: 0
