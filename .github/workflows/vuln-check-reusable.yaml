@@ -49,7 +49,7 @@ jobs:
 
     steps:
       - name: Checkout vuln-check scripts
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: scalar-labs/actions
           sparse-checkout: vuln-check-script
@@ -82,18 +82,18 @@ jobs:
           fi
 
       - name: Checkout the target repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ steps.prepare-target-ref.outputs.target-ref }}
 
       - name: Set up JDK 8
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '8'
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Docker build
         run: ./gradlew docker
@@ -120,7 +120,7 @@ jobs:
           done
 
       - name: Upload images as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: docker-images-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.target-ref }}
           path: images_output
@@ -152,7 +152,7 @@ jobs:
           fi
 
       - name: Download Docker images artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: docker-images-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.target-ref }}
 
