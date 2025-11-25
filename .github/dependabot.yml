@@ -9,5 +9,6 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    reviewers:
-      - "scalar-labs/scalardb"
+      day: "monday"
+      time: "01:00"
+      timezone: "Asia/Tokyo"
