@@ -21,6 +21,11 @@ on:
         required: false
         type: string
         default: "./gradlew :common:properties -q | grep version: | awk '{print $2}'"
+      java-versions:
+        description: 'JDK versions to install (one per line). Defaults to Java 8.'
+        required: false
+        type: string
+        default: '8'
     secrets:
       GPR_USERNAME:
         description: 'Username for authenticating to GitHub Package Registry (GPR)'
@@ -86,10 +91,10 @@ jobs:
         with:
           ref: ${{ steps.prepare-target-ref.outputs.target-ref }}
 
-      - name: Set up JDK 8
-        uses: actions/setup-java@v4
+      - name: Set up JDK
+        uses: actions/setup-java@v5
         with:
-          java-version: '8'
+          java-version: ${{ inputs.java-versions }}
           distribution: 'temurin'
 
       - name: Setup Gradle
