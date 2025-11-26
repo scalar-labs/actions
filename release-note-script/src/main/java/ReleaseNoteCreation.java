@@ -269,6 +269,7 @@ public class ReleaseNoteCreation {
 
     private static final String MERGED_STATE = "merged";
     private static final int LIMIT_NUMBER_OF_RETRIEVE_PULL_REQUESTS = 10000;
+    private static final int LIMIT_NUMBER_OF_RETRIEVE_PROJECTS = 10000;
     private static final int PROCESS_TIME_OUT_IN_SEC = 10;
 
     private final String owner;
@@ -291,8 +292,11 @@ public class ReleaseNoteCreation {
       BufferedReader br =
           runSubProcessAndGetOutputAsReader(
               format(
-                  "gh project list --owner %s --closed | awk '/%s/ {print}' | awk '/%s/ {print $1}'",
-                  this.owner, this.projectTitlePrefix, getVersion()));
+                  "gh project list --owner %s --closed --limit %d | awk '/%s/ {print}' | awk '/%s/ {print $1}'",
+                  this.owner,
+                  LIMIT_NUMBER_OF_RETRIEVE_PROJECTS,
+                  this.projectTitlePrefix,
+                  getVersion()));
 
       String line = br.readLine(); // Assuming only one line exists.
       if (line == null) throw new RuntimeException("Couldn't get the projectId");
