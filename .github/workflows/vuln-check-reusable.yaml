@@ -125,7 +125,7 @@ jobs:
           done
 
       - name: Upload images as artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: docker-images-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.target-ref }}
           path: images_output
@@ -157,7 +157,7 @@ jobs:
           fi
 
       - name: Download Docker images artifact
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: docker-images-${{ github.run_id }}-${{ github.run_attempt }}-${{ inputs.target-ref }}
 
