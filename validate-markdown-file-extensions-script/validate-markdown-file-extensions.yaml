@@ -10,7 +10,7 @@ on:
 
 jobs:
   validate-mdx-extensions:
-    uses: scalar-labs/actions/.github/workflows/.github/workflows/validate-markdown-file-extensions-reusable.yml@main
+    uses: scalar-labs/actions/.github/workflows/validate-markdown-file-extensions-reusable.yml@main
     # Optional: customize the paths if they differ from defaults
     # with:
     #   docs-paths: "docs/en-us/,docs/ja-jp/"
