@@ -21,14 +21,14 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Get changed files
         id: changed-files
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DOCS_PATHS: ${{ inputs.docs-paths }}
           COMPONENTS_PATH: ${{ inputs.components-path }}
         run: |
@@ -48,10 +48,8 @@ jobs:
 
           # Filter for .md files in specified paths
           invalid_files=""
-          relevant_files=""
           while IFS= read -r file; do
             if [[ -n "$file" && ("$file" =~ ^($docs_pattern) || "$file" =~ ^$components_pattern) ]]; then
-              relevant_files="$relevant_files$file"$'\n'
               if [[ "$file" =~ \.md$ ]]; then
                 invalid_files="$invalid_files$file"$'\n'
               fi
@@ -60,27 +58,16 @@ jobs:
 
           # Remove trailing newlines.
           invalid_files=$(echo "$invalid_files" | sed '/^$/d')
-          relevant_files=$(echo "$relevant_files" | sed '/^$/d')
 
           # Set outputs.
           echo "invalid_files<<EOF" >> $GITHUB_OUTPUT
           echo "$invalid_files" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-          echo "relevant_files<<EOF" >> $GITHUB_OUTPUT
-          echo "$relevant_files" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
           if [[ -n "$invalid_files" ]]; then
             echo "has_invalid_files=true" >> $GITHUB_OUTPUT
           else
             echo "has_invalid_files=false" >> $GITHUB_OUTPUT
-          fi
-
-          if [[ -n "$relevant_files" ]]; then
-            echo "has_relevant_files=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_relevant_files=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Validate file extensions
