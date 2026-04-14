@@ -9,7 +9,7 @@ This workflow validates that Markdown files in Docusaurus projects use the corre
 
 Docusaurus requires `.mdx` extensions for files that may contain JSX components or need advanced MDX features. Inconsistent extensions can cause build failures and deployment issues.
 
-## Set up workflow
+## Set up the workflow
 
 The following instructions will guide you through setting up the workflow in your repository to ensure that all Markdown files have the correct extensions.
 
@@ -25,6 +25,7 @@ Copy the [**validate-markdown-file-extensions.yaml**](validate-markdown-file-ext
 > with:
 >   docs-paths: "your/docs/path/,another/docs/path/"
 >   components-path: "your/components/path/"
+> ```
 
 ### Step 2: Configure branch protection
 
