@@ -1,0 +1,17 @@
+name: Validate Markdown File Extensions
+
+on:
+  pull_request:
+    branches:
+      - main
+      - "[0-9]+"
+      - "[0-9]+.[0-9]+"
+    types: [opened, synchronize, reopened]
+
+jobs:
+  validate-mdx-extensions:
+    uses: scalar-labs/actions/.github/workflows/validate-markdown-file-extensions-reusable.yml@main
+    # Optional: customize the paths if they differ from defaults
+    # with:
+    #   docs-paths: "docs/en-us/,docs/ja-jp/"
+    #   components-path: "src/components/"
