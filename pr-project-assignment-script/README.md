@@ -1,6 +1,6 @@
 # Set Up Workflow for Checking PR Project Assignments
 
-The [`.github/workflows/pr-project-assignment-check-reusable.yml`](../.github/workflows/pr-project-assignment-check-reusable.yml) workflow checks if a PR has a project assigned in the GitHub sidebar. The following outcomes are possible when the workflow runs:
+The [`.github/workflows/pr-project-assignment-check-reusable.yaml`](../.github/workflows/pr-project-assignment-check-reusable.yaml) workflow checks if a PR has a project assigned in the GitHub sidebar. The following outcomes are possible when the workflow runs:
 
 - **If projects are assigned:** The workflow detects the assigned project(s) and completes without posting a PR comment.
 - **If no projects are assigned:** The workflow posts a PR comment mentioning the PR creator (@username) as a heads-up.
