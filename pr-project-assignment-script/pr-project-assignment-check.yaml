@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   check_project_assignment:
-    uses: scalar-labs/actions/.github/workflows/pr-project-assignment-check-reusable.yml@main
+    uses: scalar-labs/actions/.github/workflows/pr-project-assignment-check-reusable.yaml@main
     with:
       pr_number: ${{ github.event.pull_request.number }}
       repo_owner: ${{ github.repository_owner }}
