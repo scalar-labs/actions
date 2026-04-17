@@ -15,6 +15,8 @@ permissions:
 
 jobs:
   check_project_assignment:
+    # Skip backport PRs (titles starting with "Backport to branch" and branch names that contain the "MAJOR.MINOR-pull-PR_NUMBER" pattern)
+    if: ${{ !(startsWith(github.event.pull_request.title, 'Backport to branch') && contains(github.head_ref, '-pull-')) }}
     uses: scalar-labs/actions/.github/workflows/pr-project-assignment-check-reusable.yaml@main
     with:
       pr_number: ${{ github.event.pull_request.number }}

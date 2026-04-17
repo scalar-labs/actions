@@ -6,6 +6,10 @@ The [`.github/workflows/pr-project-assignment-check-reusable.yaml`](../.github/w
 - **If no projects are assigned:** The workflow posts a PR comment mentioning the PR creator (@username) as a heads-up.
   - The workflow also shows a warning annotation (non-blocking) if no projects are found. The reason why this is a warning and not an error is to allow flexibility in cases where project assignment may not be mandatory.
 
+> [!NOTE]
+>
+> **Backport PRs are automatically excluded:** The workflow will not run at all for backport PRs, avoiding any GitHub Actions costs. A backport PR is identified by a title that starts with "Backport to branch" and includes a branch format like `MAJOR.MINOR-pull-PR_NUMBER` in either the PR title or the branch name (for example, "Backport to branch 3.17-pull-1234" or branch "3.17-pull-1234"). This filtering happens at the workflow trigger level for zero-cost exclusion.
+
 ## Requirements
 
 - The repository must have GitHub Projects enabled.
