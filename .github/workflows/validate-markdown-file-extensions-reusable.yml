@@ -17,7 +17,7 @@ on:
 jobs:
   validate-mdx-extensions:
     name: Check for .md files in docs locale folders and components
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
 
     steps:
       - name: Checkout code
