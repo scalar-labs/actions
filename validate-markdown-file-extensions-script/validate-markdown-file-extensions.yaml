@@ -10,6 +10,8 @@ on:
 
 jobs:
   validate-mdx-extensions:
+    # Skip backport PRs (titles starting with "Backport to branch" and branch names that contain the "MAJOR.MINOR-pull-PR_NUMBER" pattern)
+    if: ${{ !(startsWith(github.event.pull_request.title, 'Backport to branch') && contains(github.head_ref, '-pull-')) }}
     uses: scalar-labs/actions/.github/workflows/validate-markdown-file-extensions-reusable.yml@main
     # Optional: customize the paths if they differ from defaults
     # with:
