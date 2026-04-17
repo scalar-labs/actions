@@ -35,7 +35,7 @@ env:
 
 jobs:
   check_project_assignment:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     env:
       # Use PROJECT_TOKEN if provided (for private projects), otherwise use GITHUB_TOKEN
       GH_TOKEN: ${{ secrets.PROJECT_TOKEN || github.token }}
