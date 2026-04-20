@@ -13,15 +13,15 @@ The [`.github/workflows/pr-project-assignment-check-reusable.yaml`](../.github/w
 ## Requirements
 
 - The repository must have GitHub Projects enabled.
-- Workflow requires `contents: read` and `pull-requests: write` permissions.
+- Workflow requires `contents: read`, `issues: write`, and `pull-requests: write` permissions.
 
 > [!NOTE]
 >
-> Supports all GitHub project types:
+> Supports GitHub Projects V2 and classic project boards:
 >
 > - Organization and repository-level GitHub Projects V2 (public projects work with default token)
-> - User-level GitHub Projects V2 (requires optional token for private projects)  
 > - Classic project boards (legacy, being deprecated)
+> - Private projects (require optional PAT token)
 
 ### Private project support
 
@@ -42,4 +42,4 @@ Copy the [`pr-project-assignment-check.yaml`](./pr-project-assignment-check.yaml
 
 > [!NOTE]
 >
-> The [`check_pr_project_assignment`](./check_pr_project_assignment) script queries GitHub's GraphQL API to check for project assignments. You don't need to include it in your repository, unless you want to customize the script for your specific needs.
+> The [`check_pr_project_assignment`](./check_pr_project_assignment) script uses the GitHub CLI to check for project assignments. This simplified approach aligns with the method used by other automation scripts in this repository. You don't need to include it in your repository, unless you want to customize the script for your specific needs.
