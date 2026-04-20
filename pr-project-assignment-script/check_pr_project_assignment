@@ -11,16 +11,5 @@ repo_owner=$1
 repo_name=$2
 pull_request_id=$3
 
-# Get GitHub projects associated with the PR using a three-stage approach:
-# 1. Direct association (org/repo Projects V2)
-# 2. Classic project boards 
-# 3. User-level projects (PR as project item)
-
-all_projects=""
-
+# Get GitHub projects associated with the PR
 gh pr view "$pull_request_id" --repo "$repo_owner/$repo_name" --json projectItems --jq '[.projectItems[].title] | join(",")'
-
-# Combine all found projects
-all_projects=$(printf "%s\n%s\n%s" "$projects_v2" "$classic_projects" "$user_projects" | grep -v '^$' | sort -u | tr '\n' ',' | sed 's/,$//' || echo "")
-
-echo "$all_projects"

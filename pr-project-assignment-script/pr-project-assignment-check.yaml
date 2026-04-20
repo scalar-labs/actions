@@ -2,7 +2,7 @@ name: PR Project Assignment Check
 
 # This workflow checks if the pull request has a project assigned and shows a warning (non-blocking) if no projects are found.
 #
-# For instructions on how to implement this workflow in your repository, see https://github.com/scalar-labs/actions/pr-project-assignment-script/README.md.
+# For instructions on how to implement this workflow in your repository, see https://github.com/scalar-labs/actions/blob/main/pr-project-assignment-script/README.md.
 
 on:
   pull_request:
