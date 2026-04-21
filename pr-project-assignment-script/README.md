@@ -21,7 +21,7 @@ The [`.github/workflows/pr-project-assignment-check-reusable.yaml`](../.github/w
 >
 > - Organization and repository-level GitHub Projects V2 (public projects work with default token)
 > - Classic project boards (legacy, being deprecated)
-> - Private projects (require optional PAT token)
+> - Private projects (requires optional PAT token)
 
 ### Private project support
 
@@ -39,7 +39,3 @@ To detect **private projects**, you'll need to provide a Personal Access Token (
 ## Implement the workflow
 
 Copy the [`pr-project-assignment-check.yaml`](./pr-project-assignment-check.yaml) file to your repository's `.github/workflows/` directory to automatically check project assignments when PRs are opened.
-
-> [!NOTE]
->
-> The [`check_pr_project_assignment`](./check_pr_project_assignment) script uses the GitHub CLI to check for project assignments. This simplified approach aligns with the method used by other automation scripts in this repository. You don't need to include it in your repository, unless you want to customize the script for your specific needs.
