@@ -15,26 +15,21 @@ The [`.github/workflows/pr-project-assignment-check-reusable.yaml`](../.github/w
 - The repository must have GitHub Projects enabled.
 - Workflow requires `contents: read`, `issues: write`, and `pull-requests: write` permissions.
 
-> [!NOTE]
->
-> Supports GitHub Projects V2 and classic project boards:
->
-> - Organization and repository-level GitHub Projects V2 (public projects work with default token)
-> - Classic project boards (legacy, being deprecated)
-> - Private projects (requires optional PAT token)
-
 ### Private project support
 
-To detect **private projects**, you'll need to provide a Personal Access Token (PAT) with `read:project` scope:
+> [!NOTE]
+>
+> The following steps are for reference since we use the existing PAT `GH_PR_PAT` for this workflow. Because of that PAT is managed at an organizational level, it can be used across all our repositories that we want to use this workflow in.
+
+To detect **private projects**, you'll need to provide a Personal Access Token (PAT) with the `read:project` scope:
 
 1. **Create a PAT:** Go to [GitHub Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens)
-2. **Add `read:project` scope:** This enables access to private projects.
-3. **Add as repository secret:** Store the token as `PROJECT_READ_TOKEN` in your repository secrets.
-4. **Uncomment the secrets section** in your workflow file (see example in sample workflow).
+2. **Add the `read:project` scope:** This enables access to private projects.
+3. **Add as repository secret:** Store the token as `GH_PR_PAT` in your repository secrets.
 
 > [!WARNING]
 >
-> **Without this PAT:** Only public projects will be detected. Private projects will be ignored, and the workflow will only return public projects assigned to the PR.
+> Without this PAT, only public projects will be detected. Private projects will be ignored, and the workflow will only return public projects assigned to the PR.
 
 ## Implement the workflow
 
