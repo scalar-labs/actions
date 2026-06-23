@@ -40,6 +40,7 @@ jobs:
         uses: anthropics/claude-code-action@beta
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: "--model claude-sonnet-4-6"
           trigger_phrase: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && '' || 'auto-translate' }}
           mode: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && 'agent' || 'tag' }}
           direct_prompt: |
