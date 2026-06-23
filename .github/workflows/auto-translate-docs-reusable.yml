@@ -37,9 +37,11 @@ jobs:
           gh auth setup-git
 
       - name: Auto-translate documentation to Japanese
-        uses: anthropics/claude-code-action@beta
+        # Pin to immutable SHA (current commit behind v1) to reduce supply-chain risk.
+        uses: anthropics/claude-code-action@30544b674398ee15c84819bd87caf8a87e8c7b55
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: "--model claude-sonnet-4-6"
           trigger_phrase: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && '' || 'auto-translate' }}
           mode: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && 'agent' || 'tag' }}
           direct_prompt: |
