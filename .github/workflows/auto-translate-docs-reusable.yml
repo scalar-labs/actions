@@ -45,7 +45,6 @@ jobs:
             --model claude-sonnet-4-6
             --allowedTools "View,Edit,Glob,Grep,Bash(git:*),Bash(mkdir:*),Bash(gh:*),Bash(cat:*)"
           trigger_phrase: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && '' || 'auto-translate' }}
-          mode: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && 'agent' || 'tag' }}
           prompt: |
             A documentation PR has been merged. Please translate any English documentation changes to Japanese and create a new PR.
 
