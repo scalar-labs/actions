@@ -41,10 +41,12 @@ jobs:
         uses: anthropics/claude-code-action@30544b674398ee15c84819bd87caf8a87e8c7b55
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          claude_args: "--model claude-sonnet-4-6"
+          claude_args: |
+            --model claude-sonnet-4-6
+            --allowedTools "View,Edit,Glob,Grep,Bash(git:*),Bash(mkdir:*),Bash(gh:*),Bash(cat:*)"
           trigger_phrase: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && '' || 'auto-translate' }}
           mode: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && 'agent' || 'tag' }}
-          direct_prompt: |
+          prompt: |
             A documentation PR has been merged. Please translate any English documentation changes to Japanese and create a new PR.
 
             ## Task
@@ -117,8 +119,6 @@ jobs:
             IMPORTANT: Make sure to authenticate with GitHub CLI first by running the gh auth commands that are available.
 
             Please analyze the merged PR, create the translations, and submit a new PR automatically.
-          allowed_tools: "View,Edit,Glob,Grep,Bash(git:*),Bash(mkdir:*),Bash(gh:*),Bash(cat:*)"
-          timeout_minutes: 10
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
