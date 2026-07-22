@@ -26,6 +26,11 @@ on:
         required: false
         type: string
         default: '8'
+      working-directory:
+        description: 'Directory to run the Gradle build and version command in. Defaults to the repository root.'
+        required: false
+        type: string
+        default: '.'
     secrets:
       GPR_USERNAME:
         description: 'Username for authenticating to GitHub Package Registry (GPR)'
@@ -101,10 +106,12 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Docker build
+        working-directory: ${{ inputs.working-directory }}
         run: ./gradlew docker
 
       - name: Set version
         id: version
+        working-directory: ${{ inputs.working-directory }}
         run: |
           VERSION=$(${{ inputs.version-command }})
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
