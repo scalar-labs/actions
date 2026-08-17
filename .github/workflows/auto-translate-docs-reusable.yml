@@ -39,7 +39,7 @@ jobs:
 
       - name: Auto-translate documentation to Japanese
         # Pin to immutable SHA (current commit behind v1) to reduce supply-chain risk.
-        uses: anthropics/claude-code-action@c038e4dcdedfbbca18dfb17df35a17e40ded4ddc
+        uses: anthropics/claude-code-action@e63208cb983318a44e3f945e959ef894b707dcfa
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
