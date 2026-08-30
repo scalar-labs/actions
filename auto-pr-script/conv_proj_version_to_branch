@@ -1,34 +1,59 @@
-#!/usr/bin/env ruby
+#!/usr/bin/env bash
 
-require "set"
+set -e -o pipefail; [[ -n "$DEBUG" ]] && set -x
 
-default_branch = ARGV.shift
-versions = ARGV
+if [[ $# -lt 1 ]]; then
+    echo "usage: $0 default_branch [version...]"
+    exit 1
+fi
 
-versions.inject(Set.new) {|acc, v|
-  major_version, minor_version, patch_version = v.strip.split(".")
+default_branch=$1
+shift
 
-  if patch_version == "0"
-    if minor_version == "0"
-      # e.g. project: "ScalarDB 4.0.0" -> branch: "master"
-      #
-      # This GitHub project corresponds to `main`/`master` branch.
-      acc << default_branch
+branches=()
+
+for version in "$@"; do
+    # Trim the surrounding whitespace.
+    read -r version <<< "$version"
+
+    # The trailing `_` absorbs any extra dot-separated fields so that
+    # `patch_version` never swallows them (e.g. "3.7.0.2" -> patch_version="0").
+    IFS=. read -r major_version minor_version patch_version _ <<< "$version"
+
+    if [[ $patch_version == "0" ]]; then
+        if [[ $minor_version == "0" ]]; then
+            # e.g. project: "ScalarDB 4.0.0" -> branch: "master"
+            #
+            # This GitHub project corresponds to `main`/`master` branch.
+            branch=$default_branch
+        else
+            # e.g. project: "ScalarDB 3.8.0" -> branch: "3"
+            #
+            # This GitHub project corresponds to a support branch.
+            branch=$major_version
+        fi
     else
-      # e.g. project: "ScalarDB 3.8.0" -> branch: "3"
-      #
-      # This GitHub project corresponds to a support branch.
-      acc << major_version
-    end
-  else
-    # e.g. project: "ScalarDB 3.7.1" -> branch: "3.7"
-    #
-    # This GitHub project corresponds to a release branch.
-    acc << "#{major_version}.#{minor_version}"
-  end
+        # e.g. project: "ScalarDB 3.7.1" -> branch: "3.7"
+        #
+        # This GitHub project corresponds to a release branch.
+        branch="$major_version.$minor_version"
+    fi
 
-  acc
-}.each {|branch|
-  puts branch
-}
+    # Emit each branch only once, keeping the order of its first appearance.
+    is_duplicate=''
+    for known_branch in "${branches[@]}"; do
+        if [[ $known_branch == "$branch" ]]; then
+            is_duplicate='true'
+            break
+        fi
+    done
+    if [[ -n $is_duplicate ]]; then
+        continue
+    fi
 
+    branches+=("$branch")
+done
+
+for branch in "${branches[@]}"; do
+    echo "$branch"
+done
