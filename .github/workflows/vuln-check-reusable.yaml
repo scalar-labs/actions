@@ -21,6 +21,11 @@ on:
         required: false
         type: string
         default: "./gradlew :common:properties -q | grep version: | awk '{print $2}'"
+      docker-build-command:
+        description: 'Shell command to build the Docker images to be scanned. Multiple commands can be specified, one per line. The command runs in `working-directory`.'
+        required: false
+        type: string
+        default: './gradlew docker'
       java-versions:
         description: 'JDK versions to install (one per line). Defaults to Java 8.'
         required: false
@@ -107,7 +112,8 @@ jobs:
 
       - name: Docker build
         working-directory: ${{ inputs.working-directory }}
-        run: ./gradlew docker
+        run: |
+          ${{ inputs.docker-build-command }}
 
       - name: Set version
         id: version
