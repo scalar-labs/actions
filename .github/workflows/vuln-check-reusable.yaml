@@ -112,6 +112,7 @@ jobs:
 
       - name: Docker build
         working-directory: ${{ inputs.working-directory }}
+        shell: bash
         run: |
           ${{ inputs.docker-build-command }}
 
