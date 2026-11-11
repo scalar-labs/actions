@@ -1,4 +1,5 @@
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.endsWith;
@@ -18,6 +19,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class ReleaseNoteCreationTest {
 
@@ -355,6 +357,63 @@ public class ReleaseNoteCreationTest {
     // Assert
     final String stdout = baos.toString(StandardCharsets.UTF_8);
     assertThat(stdout).isEqualTo(expected);
+  }
+
+  @Test
+  void createReleaseNote_failedToProcessAPullRequest_outputFailedItem() throws Exception {
+    // Arrange
+    ReleaseNoteCreation.GitHubContext ghContextMock = mock(ReleaseNoteCreation.GitHubContext.class);
+    when(ghContextMock.getProjectId()).thenReturn("PVT_dummy");
+    when(ghContextMock.getPullRequestNumbers("PVT_dummy")).thenReturn(List.of("1", "2"));
+    addMockBehaviourToGitHubContext(
+        ghContextMock, "1", ReleaseNoteCreation.Category.IMPROVEMENT, "An improvement text.");
+    when(ghContextMock.isPullRequestMerged("2"))
+        .thenThrow(new RuntimeException("Command failed with exit code 1"));
+    ReleaseNoteCreation sut = new ReleaseNoteCreation(ghContextMock);
+
+    String expected =
+        "## Summary\n\n"
+            + "## Improvements\n"
+            + "- An improvement text. (#1)\n\n"
+            + "## Miscellaneous\n"
+            + "- ERROR: Failed to process this PR. Check it manually. (#2)\n\n\n";
+
+    final ByteArrayOutputStream baos = new ByteArrayOutputStream(); // Capture the standard output
+    System.setOut(new PrintStream(baos, false, StandardCharsets.UTF_8));
+
+    // Act
+    sut.createReleaseNote();
+
+    // Assert
+    final String stdout = baos.toString(StandardCharsets.UTF_8);
+    assertThat(stdout).isEqualTo(expected);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"exit 1", "false | cat"})
+  void runSubProcessAndGetOutputAsReader_commandFailed_shouldThrowException(String command) {
+    // Arrange
+    ReleaseNoteCreation.GitHubContext ghContext =
+        new ReleaseNoteCreation.GitHubContext("owner", "Project", "1.0.0", "repository");
+
+    // Act Assert
+    assertThatThrownBy(() -> ghContext.runSubProcessAndGetOutputAsReader(command))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessageContaining("exit code 1");
+  }
+
+  @Test
+  void runSubProcessAndGetOutputAsReader_commandSucceeded_returnOutput() throws Exception {
+    // Arrange
+    ReleaseNoteCreation.GitHubContext ghContext =
+        new ReleaseNoteCreation.GitHubContext("owner", "Project", "1.0.0", "repository");
+
+    // Act
+    BufferedReader br = ghContext.runSubProcessAndGetOutputAsReader("echo hello | cat");
+
+    // Assert
+    assertThat(br.readLine()).isEqualTo("hello");
+    assertThat(br.readLine()).isNull();
   }
 
   static Stream<Arguments> extractReleaseNoteInfo_normalText_addedCorrectCategory() {

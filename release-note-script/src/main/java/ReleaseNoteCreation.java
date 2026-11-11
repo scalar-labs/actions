@@ -38,6 +38,8 @@ public class ReleaseNoteCreation {
   private static final Pattern PATTERN_SAME_AS_TEXT =
       Pattern.compile("^ *-? *[Ss]ame ?[Aa]s +#?([0-9]+) *$");
   private static final Pattern PATTERN_QUOTE = Pattern.compile("^ *>.*$");
+  private static final String FAILED_ITEM_TEXT =
+      "ERROR: Failed to process this PR. Check it manually.";
 
   private final GitHubContext ghContext;
 
@@ -94,11 +96,21 @@ public class ReleaseNoteCreation {
       } catch (Exception e) {
         System.err.println("ERROR: failed processing the PR: " + prNumber);
         e.printStackTrace();
+        // Output an item for the PR so that it's noticed in the draft
+        addFailedItem(prNumber);
       }
     }
 
     assortSameAsItems();
     outputReleaseNote();
+  }
+
+  private void addFailedItem(String prNumber) {
+    ReleaseNoteText releaseNoteText = new ReleaseNoteText();
+    releaseNoteText.category = Category.MISCELLANEOUS;
+    releaseNoteText.text = FAILED_ITEM_TEXT;
+    releaseNoteText.prNumbers.add(prNumber);
+    categorizeReleaseNoteText(releaseNoteText);
   }
 
   void extractReleaseNoteInfo(String prNumber) throws Exception {
@@ -314,7 +326,7 @@ public class ReleaseNoteCreation {
       this.repository = repository;
     }
 
-    private String getProjectId() throws Exception {
+    String getProjectId() throws Exception {
       /*
        * Includes closed project if we get the project list so that we can run
        * this script to the closed project for debug.
@@ -342,12 +354,14 @@ public class ReleaseNoteCreation {
       return this.version.substring(0, index);
     }
 
-    private List<String> getPullRequestNumbers(String projectId) throws Exception {
+    List<String> getPullRequestNumbers(String projectId) throws Exception {
+      // A project can also contain issues, such as one created when a backport failed, so only the
+      // items whose type is PullRequest are picked up
       BufferedReader br =
           runSubProcessAndGetOutputAsReader(
               format(
-                  "gh project item-list %s --owner %s --limit %d | awk -F'\\t' '/\\/%s\\t/ {print"
-                      + " $3}'",
+                  "gh project item-list %s --owner %s --limit %d"
+                      + " | awk -F'\\t' '$1 == \"PullRequest\" && /\\/%s\\t/ {print $3}'",
                   projectId, this.owner, LIMIT_NUMBER_OF_RETRIEVE_PULL_REQUESTS, this.repository));
 
       String line;
@@ -398,7 +412,12 @@ public class ReleaseNoteCreation {
 
     BufferedReader runSubProcessAndGetOutputAsReader(String command) throws Exception {
       if (DEBUG != null) System.err.printf("Executed: %s%n", command);
-      Process p = new ProcessBuilder("bash", "-c", command).start();
+      // pipefail makes a failure of any command in a pipeline fail the whole command, and the
+      // error output of the commands goes to the standard error of this script
+      Process p =
+          new ProcessBuilder("bash", "-o", "pipefail", "-c", command)
+              .redirectError(ProcessBuilder.Redirect.INHERIT)
+              .start();
 
       BufferedReader result = null;
       try (BufferedReader br =
@@ -413,6 +432,10 @@ public class ReleaseNoteCreation {
             format(
                 "WARN: Process was exceeded timeout(%d sec). command: %s%n",
                 PROCESS_TIME_OUT_IN_SEC, command));
+      }
+      if (p.exitValue() != 0) {
+        throw new RuntimeException(
+            format("Command failed with exit code %d. command: %s", p.exitValue(), command));
       }
 
       return result;
