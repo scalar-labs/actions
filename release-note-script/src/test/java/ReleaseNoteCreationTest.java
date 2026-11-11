@@ -141,6 +141,66 @@ public class ReleaseNoteCreationTest {
   }
 
   @Test
+  void assortSameAsItems_topicPullRequestWithoutReleaseNotesSection_outputAsTheyAre()
+      throws Exception {
+    // Arrange
+    ReleaseNoteCreation.GitHubContext ghContextMock = mock(ReleaseNoteCreation.GitHubContext.class);
+    when(ghContextMock.isPullRequestMerged("1")).thenReturn(true);
+    when(ghContextMock.getCategoryFromPullRequest("1"))
+        .thenReturn(ReleaseNoteCreation.Category.ENHANCEMENT);
+    when(ghContextMock.getPullRequestBody("1"))
+        .thenReturn(
+            new BufferedReader(new StringReader("## Description\nA topic pull request.\n")));
+    addMockBehaviourToGitHubContext(
+        ghContextMock, "2", ReleaseNoteCreation.Category.BUGFIX, "Same as #1\nAdditional comment.");
+    addMockBehaviourToGitHubContext(
+        ghContextMock, "3", ReleaseNoteCreation.Category.ENHANCEMENT, "Same as #1");
+
+    ReleaseNoteCreation sut = new ReleaseNoteCreation(ghContextMock);
+    sut.extractReleaseNoteInfo("1");
+    sut.extractReleaseNoteInfo("2");
+    sut.extractReleaseNoteInfo("3");
+
+    // Act
+    sut.assortSameAsItems();
+
+    // Assert
+    List<ReleaseNoteCreation.ReleaseNoteText> releaseNoteTexts;
+
+    releaseNoteTexts = sut.categoryMap.get(ReleaseNoteCreation.Category.BUGFIX);
+    assertThat(releaseNoteTexts).isNotNull();
+    assertThat(releaseNoteTexts.size()).isEqualTo(1);
+    assertThat(releaseNoteTexts.get(0).prNumbers).containsExactly("2");
+    assertThat(releaseNoteTexts.get(0).text).isEqualTo("Additional comment.");
+
+    releaseNoteTexts = sut.categoryMap.get(ReleaseNoteCreation.Category.ENHANCEMENT);
+    assertThat(releaseNoteTexts).isNotNull();
+    assertThat(releaseNoteTexts.size()).isEqualTo(1);
+    assertThat(releaseNoteTexts.get(0).prNumbers).containsExactly("3");
+    assertThat(releaseNoteTexts.get(0).text).isNull();
+  }
+
+  @Test
+  void extractReleaseNoteInfo_withoutReleaseNotesSection_shouldBeIgnored() throws Exception {
+    // Arrange
+    ReleaseNoteCreation.GitHubContext ghContextMock = mock(ReleaseNoteCreation.GitHubContext.class);
+    when(ghContextMock.isPullRequestMerged(anyString())).thenReturn(true);
+    when(ghContextMock.getCategoryFromPullRequest(anyString()))
+        .thenReturn(ReleaseNoteCreation.Category.IMPROVEMENT);
+    when(ghContextMock.getPullRequestBody(anyString()))
+        .thenReturn(
+            new BufferedReader(
+                new StringReader("Bumps the dependencies group with 1 update.\n\n## Changes\n")));
+    ReleaseNoteCreation sut = new ReleaseNoteCreation(ghContextMock);
+
+    // Act
+    sut.extractReleaseNoteInfo("1");
+
+    // Assert
+    assertThat(sut.categoryMap.get(ReleaseNoteCreation.Category.IMPROVEMENT)).isNull();
+  }
+
+  @Test
   void extractReleaseNoteInfo_nonAsciiText_extractedAsIs() throws Exception {
     // Arrange
     String rnText = "Fixed a bug where `INSERT INTO ns.té` was executed on `ns.t` — it’s fixed.";

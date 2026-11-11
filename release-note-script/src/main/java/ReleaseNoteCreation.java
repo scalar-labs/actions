@@ -108,10 +108,19 @@ public class ReleaseNoteCreation {
     BufferedReader br = ghContext.getPullRequestBody(prNumber);
 
     String line;
+    boolean hasReleaseNotesSection = false;
     while ((line = br.readLine()) != null) {
       if (Pattern.matches("^## *[Rr]elease *[Nn]otes? *", line)) {
+        hasReleaseNotesSection = true;
         break;
       }
+    }
+
+    // A pull request without the release notes section, such as one created by Dependabot, is
+    // not included in the release note
+    if (!hasReleaseNotesSection) {
+      System.err.println("INFO: Skipped the PR without a release notes section: " + prNumber);
+      return;
     }
 
     ReleaseNoteText releaseNoteText = extractReleaseNoteText(category, prNumber, br);
@@ -180,19 +189,26 @@ public class ReleaseNoteCreation {
       String topicPrNumber = entry.getKey();
       List<ReleaseNoteText> releaseNoteTextsInSameAs = entry.getValue();
 
-      Arrays.stream(Category.values())
-          .forEach(
-              category -> {
-                List<ReleaseNoteText> releaseNoteTextsInACategory = categoryMap.get(category);
-                if (releaseNoteTextsInACategory != null) {
-                  releaseNoteTextsInACategory.forEach(
-                      rnInfo -> {
-                        if (rnInfo.prNumbers.get(0).equals(topicPrNumber)) {
-                          releaseNoteTextsInSameAs.forEach(from -> merge(from, rnInfo));
-                        }
-                      });
-                }
-              });
+      List<ReleaseNoteText> topicReleaseNoteTexts =
+          categoryMap.values().stream()
+              .flatMap(List::stream)
+              .filter(rnInfo -> rnInfo.prNumbers.get(0).equals(topicPrNumber))
+              .collect(Collectors.toList());
+
+      if (topicReleaseNoteTexts.isEmpty()) {
+        // The topic PR isn't in the release note, for example, because it doesn't have a release
+        // notes section, so output the items that refer to it as they are so that they're not
+        // dropped
+        releaseNoteTextsInSameAs.forEach(
+            rnText -> {
+              setMiscellaneousCategoryIfCategoryIsNull(rnText);
+              categoryMap.computeIfAbsent(rnText.category, k -> new ArrayList<>()).add(rnText);
+            });
+        continue;
+      }
+
+      topicReleaseNoteTexts.forEach(
+          to -> releaseNoteTextsInSameAs.forEach(from -> merge(from, to)));
     }
   }
 
