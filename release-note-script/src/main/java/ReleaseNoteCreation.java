@@ -1,7 +1,10 @@
 import static java.lang.String.format;
 
 import java.io.BufferedReader;
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
 import java.io.InputStreamReader;
+import java.io.PrintStream;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -29,7 +32,9 @@ import java.util.stream.Collectors;
 public class ReleaseNoteCreation {
 
   private static final String DEBUG = System.getenv("DEBUG");
-  private static final Pattern PATTERN_RELEASE_NOTE_TEXT = Pattern.compile("^ *-? *(\\p{Print}+)$");
+  // UNICODE_CHARACTER_CLASS makes \p{Print} match non-ASCII characters such as "é" and "—"
+  private static final Pattern PATTERN_RELEASE_NOTE_TEXT =
+      Pattern.compile("^ *-? *(\\p{Print}+)$", Pattern.UNICODE_CHARACTER_CLASS);
   private static final Pattern PATTERN_SAME_AS_TEXT =
       Pattern.compile("^ *-? *[Ss]ame ?[Aa]s +#?([0-9]+) *$");
 
@@ -57,6 +62,10 @@ public class ReleaseNoteCreation {
     String projectTitlePrefix = args[1];
     String version = args[2];
     String repository = args[3];
+
+    // Write the release note in UTF-8 regardless of the locale of the runner
+    System.setOut(
+        new PrintStream(new FileOutputStream(FileDescriptor.out), true, StandardCharsets.UTF_8));
 
     ReleaseNoteCreation main =
         new ReleaseNoteCreation(owner, projectTitlePrefix, version, repository);

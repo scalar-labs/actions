@@ -141,6 +141,24 @@ public class ReleaseNoteCreationTest {
   }
 
   @Test
+  void extractReleaseNoteInfo_nonAsciiText_extractedAsIs() throws Exception {
+    // Arrange
+    String rnText = "Fixed a bug where `INSERT INTO ns.té` was executed on `ns.t` — it’s fixed.";
+    ReleaseNoteCreation sut =
+        new ReleaseNoteCreation(mockedGhContext(ReleaseNoteCreation.Category.BUGFIX, rnText));
+
+    // Act
+    sut.extractReleaseNoteInfo("1");
+
+    // Assert
+    List<ReleaseNoteCreation.ReleaseNoteText> releaseNoteTexts =
+        sut.categoryMap.get(ReleaseNoteCreation.Category.BUGFIX);
+    assertThat(releaseNoteTexts).isNotNull();
+    assertThat(releaseNoteTexts.size()).isEqualTo(1);
+    assertThat(releaseNoteTexts.get(0).text).isEqualTo(rnText);
+  }
+
+  @Test
   void extractReleaseNoteInfo_withoutCategory_addedToMiscellaneousCategory() throws Exception {
     // Arrange
     String rnText = "miscellaneous test";

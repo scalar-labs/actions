@@ -9,6 +9,7 @@
 - An improvement text of ScalarDB (#2)
 ### Bug fixes
 - A bug fixe text of ScalarDB [CVE-1234-5678](dummy) (#3)
+- A bug fix text of ScalarDB with non-ASCII characters: `ns.té` — it’s fixed (#4)
 
 ## Enterprise edition
 ### Backward incompatible changes
@@ -39,4 +40,5 @@
 - A bug fixe text of ScalarDB GraphQL [CVE-1234-5678](dummy)
 #### ScalarDB SQL
 - A bug fixe text of ScalarDB SQL [CVE-1234-5678](dummy)
+- A bug fix text of ScalarDB SQL with non-ASCII characters: `ns.té` — it’s fixed
 
