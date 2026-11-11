@@ -158,6 +158,50 @@ public class ReleaseNoteCreationTest {
     assertThat(releaseNoteTexts.get(0).text).isEqualTo(rnText);
   }
 
+  @ParameterizedTest
+  @MethodSource
+  void extractReleaseNoteInfo_multipleLines_joinedIntoOneItem(String rnText, String expected)
+      throws Exception {
+    // Arrange
+    ReleaseNoteCreation sut =
+        new ReleaseNoteCreation(mockedGhContext(ReleaseNoteCreation.Category.BUGFIX, rnText));
+
+    // Act
+    sut.extractReleaseNoteInfo("1");
+
+    // Assert
+    List<ReleaseNoteCreation.ReleaseNoteText> releaseNoteTexts =
+        sut.categoryMap.get(ReleaseNoteCreation.Category.BUGFIX);
+    assertThat(releaseNoteTexts).isNotNull();
+    assertThat(releaseNoteTexts.size()).isEqualTo(1);
+    assertThat(releaseNoteTexts.get(0).prNumbers).containsExactly("1");
+    assertThat(releaseNoteTexts.get(0).text).isEqualTo(expected);
+  }
+
+  static Stream<Arguments> extractReleaseNoteInfo_multipleLines_joinedIntoOneItem() {
+    return Stream.of(
+        arguments("- Fixed issue A.\n- Fixed issue B.", "Fixed issue A. Fixed issue B."),
+        arguments("Fixed issue A.\n\nFixed issue B.", "Fixed issue A. Fixed issue B."),
+        arguments("Fixed issue A.\n   \n", "Fixed issue A."),
+        arguments(
+            "> Provide release note text for this PR.\n"
+                + "> \n"
+                + "> For example:\n"
+                + "> \n"
+                + "> Added validation for the Consensus Commit mutation operation.\n"
+                + "\n"
+                + "Fixed issue A.",
+            "Fixed issue A."),
+        // Only the guidance in the PR template is left, so the item has no text
+        arguments(
+            "> Provide release note text for this PR.\n"
+                + "> \n"
+                + "> For example:\n"
+                + "> \n"
+                + "> Added validation for the Consensus Commit mutation operation.",
+            null));
+  }
+
   @Test
   void extractReleaseNoteInfo_withoutCategory_addedToMiscellaneousCategory() throws Exception {
     // Arrange

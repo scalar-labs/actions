@@ -37,6 +37,7 @@ public class ReleaseNoteCreation {
       Pattern.compile("^ *-? *(\\p{Print}+)$", Pattern.UNICODE_CHARACTER_CLASS);
   private static final Pattern PATTERN_SAME_AS_TEXT =
       Pattern.compile("^ *-? *[Ss]ame ?[Aa]s +#?([0-9]+) *$");
+  private static final Pattern PATTERN_QUOTE = Pattern.compile("^ *>.*$");
 
   private final GitHubContext ghContext;
 
@@ -130,6 +131,8 @@ public class ReleaseNoteCreation {
       if (Pattern.matches("^## *.*", line))
         break; // Reached to the next section header (ended release note section)
       if (Pattern.matches("^ *-? *N/?A *$", line)) return null; // This PR is not user-facing
+      if (line.isBlank() || PATTERN_QUOTE.matcher(line).matches())
+        continue; // Skip blank lines and quoted lines such as the guidance in the PR template
 
       Matcher releseNoteTextMatcher =
           PATTERN_RELEASE_NOTE_TEXT.matcher(line); // Extract Release note text
@@ -137,7 +140,9 @@ public class ReleaseNoteCreation {
         if (!Pattern.matches("^ *-? *[Ss]ame ?[Aa]s +#?([0-9]+) *$", line)) {
           String matched = releseNoteTextMatcher.group(1);
           if (DEBUG != null) System.err.printf("matched: %s%n", matched);
-          releaseNoteText.text = releseNoteTextMatcher.group(1);
+          // Join all the lines into one item since a pull request has one release note item
+          releaseNoteText.text =
+              releaseNoteText.text == null ? matched : releaseNoteText.text + " " + matched;
         }
       }
 
