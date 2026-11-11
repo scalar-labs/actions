@@ -1,8 +1,13 @@
 import static java.lang.String.format;
 
 import java.io.BufferedReader;
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.PrintStream;
 import java.io.StringReader;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -11,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -29,9 +35,14 @@ import java.util.stream.Collectors;
 public class ReleaseNoteCreation {
 
   private static final String DEBUG = System.getenv("DEBUG");
-  private static final Pattern PATTERN_RELEASE_NOTE_TEXT = Pattern.compile("^ *-? *(\\p{Print}+)$");
+  // UNICODE_CHARACTER_CLASS makes \p{Print} match non-ASCII characters such as "é" and "—"
+  private static final Pattern PATTERN_RELEASE_NOTE_TEXT =
+      Pattern.compile("^ *-? *(\\p{Print}+)$", Pattern.UNICODE_CHARACTER_CLASS);
   private static final Pattern PATTERN_SAME_AS_TEXT =
       Pattern.compile("^ *-? *[Ss]ame ?[Aa]s +#?([0-9]+) *$");
+  private static final Pattern PATTERN_QUOTE = Pattern.compile("^ *>.*$");
+  private static final String FAILED_ITEM_TEXT =
+      "ERROR: Failed to process this PR. Check it manually.";
 
   private final GitHubContext ghContext;
 
@@ -57,6 +68,10 @@ public class ReleaseNoteCreation {
     String projectTitlePrefix = args[1];
     String version = args[2];
     String repository = args[3];
+
+    // Write the release note in UTF-8 regardless of the locale of the runner
+    System.setOut(
+        new PrintStream(new FileOutputStream(FileDescriptor.out), true, StandardCharsets.UTF_8));
 
     ReleaseNoteCreation main =
         new ReleaseNoteCreation(owner, projectTitlePrefix, version, repository);
@@ -84,11 +99,21 @@ public class ReleaseNoteCreation {
       } catch (Exception e) {
         System.err.println("ERROR: failed processing the PR: " + prNumber);
         e.printStackTrace();
+        // Output an item for the PR so that it's noticed in the draft
+        addFailedItem(prNumber);
       }
     }
 
     assortSameAsItems();
     outputReleaseNote();
+  }
+
+  private void addFailedItem(String prNumber) {
+    ReleaseNoteText releaseNoteText = new ReleaseNoteText();
+    releaseNoteText.category = Category.MISCELLANEOUS;
+    releaseNoteText.text = FAILED_ITEM_TEXT;
+    releaseNoteText.prNumbers.add(prNumber);
+    categorizeReleaseNoteText(releaseNoteText);
   }
 
   void extractReleaseNoteInfo(String prNumber) throws Exception {
@@ -98,10 +123,19 @@ public class ReleaseNoteCreation {
     BufferedReader br = ghContext.getPullRequestBody(prNumber);
 
     String line;
+    boolean hasReleaseNotesSection = false;
     while ((line = br.readLine()) != null) {
       if (Pattern.matches("^## *[Rr]elease *[Nn]otes? *", line)) {
+        hasReleaseNotesSection = true;
         break;
       }
+    }
+
+    // A pull request without the release notes section, such as one created by Dependabot, is
+    // not included in the release note
+    if (!hasReleaseNotesSection) {
+      System.err.println("INFO: Skipped the PR without a release notes section: " + prNumber);
+      return;
     }
 
     ReleaseNoteText releaseNoteText = extractReleaseNoteText(category, prNumber, br);
@@ -121,6 +155,8 @@ public class ReleaseNoteCreation {
       if (Pattern.matches("^## *.*", line))
         break; // Reached to the next section header (ended release note section)
       if (Pattern.matches("^ *-? *N/?A *$", line)) return null; // This PR is not user-facing
+      if (line.isBlank() || PATTERN_QUOTE.matcher(line).matches())
+        continue; // Skip blank lines and quoted lines such as the guidance in the PR template
 
       Matcher releseNoteTextMatcher =
           PATTERN_RELEASE_NOTE_TEXT.matcher(line); // Extract Release note text
@@ -128,7 +164,9 @@ public class ReleaseNoteCreation {
         if (!Pattern.matches("^ *-? *[Ss]ame ?[Aa]s +#?([0-9]+) *$", line)) {
           String matched = releseNoteTextMatcher.group(1);
           if (DEBUG != null) System.err.printf("matched: %s%n", matched);
-          releaseNoteText.text = releseNoteTextMatcher.group(1);
+          // Join all the lines into one item since a pull request has one release note item
+          releaseNoteText.text =
+              releaseNoteText.text == null ? matched : releaseNoteText.text + " " + matched;
         }
       }
 
@@ -166,19 +204,26 @@ public class ReleaseNoteCreation {
       String topicPrNumber = entry.getKey();
       List<ReleaseNoteText> releaseNoteTextsInSameAs = entry.getValue();
 
-      Arrays.stream(Category.values())
-          .forEach(
-              category -> {
-                List<ReleaseNoteText> releaseNoteTextsInACategory = categoryMap.get(category);
-                if (releaseNoteTextsInACategory != null) {
-                  releaseNoteTextsInACategory.forEach(
-                      rnInfo -> {
-                        if (rnInfo.prNumbers.get(0).equals(topicPrNumber)) {
-                          releaseNoteTextsInSameAs.forEach(from -> merge(from, rnInfo));
-                        }
-                      });
-                }
-              });
+      List<ReleaseNoteText> topicReleaseNoteTexts =
+          categoryMap.values().stream()
+              .flatMap(List::stream)
+              .filter(rnInfo -> rnInfo.prNumbers.get(0).equals(topicPrNumber))
+              .collect(Collectors.toList());
+
+      if (topicReleaseNoteTexts.isEmpty()) {
+        // The topic PR isn't in the release note, for example, because it doesn't have a release
+        // notes section, so output the items that refer to it as they are so that they're not
+        // dropped
+        releaseNoteTextsInSameAs.forEach(
+            rnText -> {
+              setMiscellaneousCategoryIfCategoryIsNull(rnText);
+              categoryMap.computeIfAbsent(rnText.category, k -> new ArrayList<>()).add(rnText);
+            });
+        continue;
+      }
+
+      topicReleaseNoteTexts.forEach(
+          to -> releaseNoteTextsInSameAs.forEach(from -> merge(from, to)));
     }
   }
 
@@ -270,7 +315,9 @@ public class ReleaseNoteCreation {
     private static final String MERGED_STATE = "merged";
     private static final int LIMIT_NUMBER_OF_RETRIEVE_PULL_REQUESTS = 10000;
     private static final int LIMIT_NUMBER_OF_RETRIEVE_PROJECTS = 10000;
-    private static final int PROCESS_TIME_OUT_IN_SEC = 10;
+    // Listing all the projects takes more than 15 seconds, and it gets slower as the number of
+    // projects grows
+    private static final int PROCESS_TIME_OUT_IN_SEC = 300;
 
     private final String owner;
     private final String projectTitlePrefix;
@@ -284,7 +331,7 @@ public class ReleaseNoteCreation {
       this.repository = repository;
     }
 
-    private String getProjectId() throws Exception {
+    String getProjectId() throws Exception {
       /*
        * Includes closed project if we get the project list so that we can run
        * this script to the closed project for debug.
@@ -312,12 +359,14 @@ public class ReleaseNoteCreation {
       return this.version.substring(0, index);
     }
 
-    private List<String> getPullRequestNumbers(String projectId) throws Exception {
+    List<String> getPullRequestNumbers(String projectId) throws Exception {
+      // A project can also contain issues, such as one created when a backport failed, so only the
+      // items whose type is PullRequest are picked up
       BufferedReader br =
           runSubProcessAndGetOutputAsReader(
               format(
-                  "gh project item-list %s --owner %s --limit %d | awk -F'\\t' '/\\/%s\\t/ {print"
-                      + " $3}'",
+                  "gh project item-list %s --owner %s --limit %d"
+                      + " | awk -F'\\t' '$1 == \"PullRequest\" && /\\/%s\\t/ {print $3}'",
                   projectId, this.owner, LIMIT_NUMBER_OF_RETRIEVE_PULL_REQUESTS, this.repository));
 
       String line;
@@ -367,25 +416,48 @@ public class ReleaseNoteCreation {
     }
 
     BufferedReader runSubProcessAndGetOutputAsReader(String command) throws Exception {
+      return runSubProcessAndGetOutputAsReader(command, PROCESS_TIME_OUT_IN_SEC);
+    }
+
+    BufferedReader runSubProcessAndGetOutputAsReader(String command, long timeoutInSec)
+        throws Exception {
       if (DEBUG != null) System.err.printf("Executed: %s%n", command);
-      Process p = new ProcessBuilder("bash", "-c", command).start();
+      // pipefail makes a failure of any command in a pipeline fail the whole command, and the
+      // error output of the commands goes to the standard error of this script
+      Process p =
+          new ProcessBuilder("bash", "-o", "pipefail", "-c", command)
+              .redirectError(ProcessBuilder.Redirect.INHERIT)
+              .start();
 
-      BufferedReader result = null;
-      try (BufferedReader br =
-          new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8)); ) {
-        String processOutput = br.lines().collect(Collectors.joining(System.lineSeparator()));
-        result = new BufferedReader(new StringReader(processOutput));
-      }
+      // Read the output in another thread while waiting for the process. The process is blocked
+      // when the pipe buffer (typically 64KiB) is full, and reading the output in this thread
+      // first would block forever if the process hangs, so the timeout wouldn't apply
+      CompletableFuture<String> output =
+          CompletableFuture.supplyAsync(
+              () -> {
+                try (BufferedReader br =
+                    new BufferedReader(
+                        new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
+                  return br.lines().collect(Collectors.joining(System.lineSeparator()));
+                } catch (IOException e) {
+                  throw new UncheckedIOException(e);
+                }
+              });
 
-      boolean isTerminated = p.waitFor(PROCESS_TIME_OUT_IN_SEC, TimeUnit.SECONDS);
+      boolean isTerminated = p.waitFor(timeoutInSec, TimeUnit.SECONDS);
       if (!isTerminated) {
+        // Kill the commands in the pipeline as well as bash
+        p.descendants().forEach(ProcessHandle::destroyForcibly);
+        p.destroyForcibly();
         throw new RuntimeException(
-            format(
-                "WARN: Process was exceeded timeout(%d sec). command: %s%n",
-                PROCESS_TIME_OUT_IN_SEC, command));
+            format("Process exceeded the timeout (%d sec). command: %s", timeoutInSec, command));
+      }
+      if (p.exitValue() != 0) {
+        throw new RuntimeException(
+            format("Command failed with exit code %d. command: %s", p.exitValue(), command));
       }
 
-      return result;
+      return new BufferedReader(new StringReader(output.get(timeoutInSec, TimeUnit.SECONDS)));
     }
 
     private boolean isValidCategory(String category) {

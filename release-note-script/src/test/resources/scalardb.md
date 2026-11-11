@@ -12,3 +12,4 @@ A dummy ScalarDB release note.
 
 ## Bug fixes
 - A bug fixe text of ScalarDB [CVE-1234-5678](dummy) (#3)
+- A bug fix text of ScalarDB with non-ASCII characters: `ns.té` — it’s fixed (#4)

@@ -1,4 +1,5 @@
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.endsWith;
@@ -14,10 +15,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class ReleaseNoteCreationTest {
 
@@ -141,6 +144,128 @@ public class ReleaseNoteCreationTest {
   }
 
   @Test
+  void assortSameAsItems_topicPullRequestWithoutReleaseNotesSection_outputAsTheyAre()
+      throws Exception {
+    // Arrange
+    ReleaseNoteCreation.GitHubContext ghContextMock = mock(ReleaseNoteCreation.GitHubContext.class);
+    when(ghContextMock.isPullRequestMerged("1")).thenReturn(true);
+    when(ghContextMock.getCategoryFromPullRequest("1"))
+        .thenReturn(ReleaseNoteCreation.Category.ENHANCEMENT);
+    when(ghContextMock.getPullRequestBody("1"))
+        .thenReturn(
+            new BufferedReader(new StringReader("## Description\nA topic pull request.\n")));
+    addMockBehaviourToGitHubContext(
+        ghContextMock, "2", ReleaseNoteCreation.Category.BUGFIX, "Same as #1\nAdditional comment.");
+    addMockBehaviourToGitHubContext(
+        ghContextMock, "3", ReleaseNoteCreation.Category.ENHANCEMENT, "Same as #1");
+
+    ReleaseNoteCreation sut = new ReleaseNoteCreation(ghContextMock);
+    sut.extractReleaseNoteInfo("1");
+    sut.extractReleaseNoteInfo("2");
+    sut.extractReleaseNoteInfo("3");
+
+    // Act
+    sut.assortSameAsItems();
+
+    // Assert
+    List<ReleaseNoteCreation.ReleaseNoteText> releaseNoteTexts;
+
+    releaseNoteTexts = sut.categoryMap.get(ReleaseNoteCreation.Category.BUGFIX);
+    assertThat(releaseNoteTexts).isNotNull();
+    assertThat(releaseNoteTexts.size()).isEqualTo(1);
+    assertThat(releaseNoteTexts.get(0).prNumbers).containsExactly("2");
+    assertThat(releaseNoteTexts.get(0).text).isEqualTo("Additional comment.");
+
+    releaseNoteTexts = sut.categoryMap.get(ReleaseNoteCreation.Category.ENHANCEMENT);
+    assertThat(releaseNoteTexts).isNotNull();
+    assertThat(releaseNoteTexts.size()).isEqualTo(1);
+    assertThat(releaseNoteTexts.get(0).prNumbers).containsExactly("3");
+    assertThat(releaseNoteTexts.get(0).text).isNull();
+  }
+
+  @Test
+  void extractReleaseNoteInfo_withoutReleaseNotesSection_shouldBeIgnored() throws Exception {
+    // Arrange
+    ReleaseNoteCreation.GitHubContext ghContextMock = mock(ReleaseNoteCreation.GitHubContext.class);
+    when(ghContextMock.isPullRequestMerged(anyString())).thenReturn(true);
+    when(ghContextMock.getCategoryFromPullRequest(anyString()))
+        .thenReturn(ReleaseNoteCreation.Category.IMPROVEMENT);
+    when(ghContextMock.getPullRequestBody(anyString()))
+        .thenReturn(
+            new BufferedReader(
+                new StringReader("Bumps the dependencies group with 1 update.\n\n## Changes\n")));
+    ReleaseNoteCreation sut = new ReleaseNoteCreation(ghContextMock);
+
+    // Act
+    sut.extractReleaseNoteInfo("1");
+
+    // Assert
+    assertThat(sut.categoryMap.get(ReleaseNoteCreation.Category.IMPROVEMENT)).isNull();
+  }
+
+  @Test
+  void extractReleaseNoteInfo_nonAsciiText_extractedAsIs() throws Exception {
+    // Arrange
+    String rnText = "Fixed a bug where `INSERT INTO ns.té` was executed on `ns.t` — it’s fixed.";
+    ReleaseNoteCreation sut =
+        new ReleaseNoteCreation(mockedGhContext(ReleaseNoteCreation.Category.BUGFIX, rnText));
+
+    // Act
+    sut.extractReleaseNoteInfo("1");
+
+    // Assert
+    List<ReleaseNoteCreation.ReleaseNoteText> releaseNoteTexts =
+        sut.categoryMap.get(ReleaseNoteCreation.Category.BUGFIX);
+    assertThat(releaseNoteTexts).isNotNull();
+    assertThat(releaseNoteTexts.size()).isEqualTo(1);
+    assertThat(releaseNoteTexts.get(0).text).isEqualTo(rnText);
+  }
+
+  @ParameterizedTest
+  @MethodSource
+  void extractReleaseNoteInfo_multipleLines_joinedIntoOneItem(String rnText, String expected)
+      throws Exception {
+    // Arrange
+    ReleaseNoteCreation sut =
+        new ReleaseNoteCreation(mockedGhContext(ReleaseNoteCreation.Category.BUGFIX, rnText));
+
+    // Act
+    sut.extractReleaseNoteInfo("1");
+
+    // Assert
+    List<ReleaseNoteCreation.ReleaseNoteText> releaseNoteTexts =
+        sut.categoryMap.get(ReleaseNoteCreation.Category.BUGFIX);
+    assertThat(releaseNoteTexts).isNotNull();
+    assertThat(releaseNoteTexts.size()).isEqualTo(1);
+    assertThat(releaseNoteTexts.get(0).prNumbers).containsExactly("1");
+    assertThat(releaseNoteTexts.get(0).text).isEqualTo(expected);
+  }
+
+  static Stream<Arguments> extractReleaseNoteInfo_multipleLines_joinedIntoOneItem() {
+    return Stream.of(
+        arguments("- Fixed issue A.\n- Fixed issue B.", "Fixed issue A. Fixed issue B."),
+        arguments("Fixed issue A.\n\nFixed issue B.", "Fixed issue A. Fixed issue B."),
+        arguments("Fixed issue A.\n   \n", "Fixed issue A."),
+        arguments(
+            "> Provide release note text for this PR.\n"
+                + "> \n"
+                + "> For example:\n"
+                + "> \n"
+                + "> Added validation for the Consensus Commit mutation operation.\n"
+                + "\n"
+                + "Fixed issue A.",
+            "Fixed issue A."),
+        // Only the guidance in the PR template is left, so the item has no text
+        arguments(
+            "> Provide release note text for this PR.\n"
+                + "> \n"
+                + "> For example:\n"
+                + "> \n"
+                + "> Added validation for the Consensus Commit mutation operation.",
+            null));
+  }
+
+  @Test
   void extractReleaseNoteInfo_withoutCategory_addedToMiscellaneousCategory() throws Exception {
     // Arrange
     String rnText = "miscellaneous test";
@@ -233,6 +358,94 @@ public class ReleaseNoteCreationTest {
     // Assert
     final String stdout = baos.toString(StandardCharsets.UTF_8);
     assertThat(stdout).isEqualTo(expected);
+  }
+
+  @Test
+  void createReleaseNote_failedToProcessAPullRequest_outputFailedItem() throws Exception {
+    // Arrange
+    ReleaseNoteCreation.GitHubContext ghContextMock = mock(ReleaseNoteCreation.GitHubContext.class);
+    when(ghContextMock.getProjectId()).thenReturn("PVT_dummy");
+    when(ghContextMock.getPullRequestNumbers("PVT_dummy")).thenReturn(List.of("1", "2"));
+    addMockBehaviourToGitHubContext(
+        ghContextMock, "1", ReleaseNoteCreation.Category.IMPROVEMENT, "An improvement text.");
+    when(ghContextMock.isPullRequestMerged("2"))
+        .thenThrow(new RuntimeException("Command failed with exit code 1"));
+    ReleaseNoteCreation sut = new ReleaseNoteCreation(ghContextMock);
+
+    String expected =
+        "## Summary\n\n"
+            + "## Improvements\n"
+            + "- An improvement text. (#1)\n\n"
+            + "## Miscellaneous\n"
+            + "- ERROR: Failed to process this PR. Check it manually. (#2)\n\n\n";
+
+    final ByteArrayOutputStream baos = new ByteArrayOutputStream(); // Capture the standard output
+    System.setOut(new PrintStream(baos, false, StandardCharsets.UTF_8));
+
+    // Act
+    sut.createReleaseNote();
+
+    // Assert
+    final String stdout = baos.toString(StandardCharsets.UTF_8);
+    assertThat(stdout).isEqualTo(expected);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"exit 1", "false | cat"})
+  void runSubProcessAndGetOutputAsReader_commandFailed_shouldThrowException(String command) {
+    // Arrange
+    ReleaseNoteCreation.GitHubContext ghContext =
+        new ReleaseNoteCreation.GitHubContext("owner", "Project", "1.0.0", "repository");
+
+    // Act Assert
+    assertThatThrownBy(() -> ghContext.runSubProcessAndGetOutputAsReader(command))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessageContaining("exit code 1");
+  }
+
+  @Test
+  void runSubProcessAndGetOutputAsReader_commandSucceeded_returnOutput() throws Exception {
+    // Arrange
+    ReleaseNoteCreation.GitHubContext ghContext =
+        new ReleaseNoteCreation.GitHubContext("owner", "Project", "1.0.0", "repository");
+
+    // Act
+    BufferedReader br = ghContext.runSubProcessAndGetOutputAsReader("echo hello | cat");
+
+    // Assert
+    assertThat(br.readLine()).isEqualTo("hello");
+    assertThat(br.readLine()).isNull();
+  }
+
+  @Test
+  @Timeout(10)
+  void runSubProcessAndGetOutputAsReader_commandHung_shouldThrowExceptionAfterTimeout() {
+    // Arrange
+    ReleaseNoteCreation.GitHubContext ghContext =
+        new ReleaseNoteCreation.GitHubContext("owner", "Project", "1.0.0", "repository");
+
+    // Act Assert
+    assertThatThrownBy(() -> ghContext.runSubProcessAndGetOutputAsReader("sleep 60 | cat", 1))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessageContaining("timeout");
+  }
+
+  @Test
+  @Timeout(10)
+  void runSubProcessAndGetOutputAsReader_outputLargerThanPipeBuffer_returnWholeOutput()
+      throws Exception {
+    // Arrange
+    ReleaseNoteCreation.GitHubContext ghContext =
+        new ReleaseNoteCreation.GitHubContext("owner", "Project", "1.0.0", "repository");
+
+    // Act
+    // The output is larger than the pipe buffer, which is typically 64KiB
+    BufferedReader br =
+        ghContext.runSubProcessAndGetOutputAsReader("head -c 200000 /dev/zero | tr '\\0' a", 5);
+
+    // Assert
+    assertThat(br.readLine()).hasSize(200000);
+    assertThat(br.readLine()).isNull();
   }
 
   static Stream<Arguments> extractReleaseNoteInfo_normalText_addedCorrectCategory() {
