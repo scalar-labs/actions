@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -413,6 +414,37 @@ public class ReleaseNoteCreationTest {
 
     // Assert
     assertThat(br.readLine()).isEqualTo("hello");
+    assertThat(br.readLine()).isNull();
+  }
+
+  @Test
+  @Timeout(10)
+  void runSubProcessAndGetOutputAsReader_commandHung_shouldThrowExceptionAfterTimeout() {
+    // Arrange
+    ReleaseNoteCreation.GitHubContext ghContext =
+        new ReleaseNoteCreation.GitHubContext("owner", "Project", "1.0.0", "repository");
+
+    // Act Assert
+    assertThatThrownBy(() -> ghContext.runSubProcessAndGetOutputAsReader("sleep 60 | cat", 1))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessageContaining("timeout");
+  }
+
+  @Test
+  @Timeout(10)
+  void runSubProcessAndGetOutputAsReader_outputLargerThanPipeBuffer_returnWholeOutput()
+      throws Exception {
+    // Arrange
+    ReleaseNoteCreation.GitHubContext ghContext =
+        new ReleaseNoteCreation.GitHubContext("owner", "Project", "1.0.0", "repository");
+
+    // Act
+    // The output is larger than the pipe buffer, which is typically 64KiB
+    BufferedReader br =
+        ghContext.runSubProcessAndGetOutputAsReader("head -c 200000 /dev/zero | tr '\\0' a", 5);
+
+    // Assert
+    assertThat(br.readLine()).hasSize(200000);
     assertThat(br.readLine()).isNull();
   }
 

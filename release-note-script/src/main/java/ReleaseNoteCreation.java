@@ -3,9 +3,11 @@ import static java.lang.String.format;
 import java.io.BufferedReader;
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.io.StringReader;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -14,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -312,7 +315,9 @@ public class ReleaseNoteCreation {
     private static final String MERGED_STATE = "merged";
     private static final int LIMIT_NUMBER_OF_RETRIEVE_PULL_REQUESTS = 10000;
     private static final int LIMIT_NUMBER_OF_RETRIEVE_PROJECTS = 10000;
-    private static final int PROCESS_TIME_OUT_IN_SEC = 10;
+    // Listing all the projects takes more than 15 seconds, and it gets slower as the number of
+    // projects grows
+    private static final int PROCESS_TIME_OUT_IN_SEC = 300;
 
     private final String owner;
     private final String projectTitlePrefix;
@@ -411,6 +416,11 @@ public class ReleaseNoteCreation {
     }
 
     BufferedReader runSubProcessAndGetOutputAsReader(String command) throws Exception {
+      return runSubProcessAndGetOutputAsReader(command, PROCESS_TIME_OUT_IN_SEC);
+    }
+
+    BufferedReader runSubProcessAndGetOutputAsReader(String command, long timeoutInSec)
+        throws Exception {
       if (DEBUG != null) System.err.printf("Executed: %s%n", command);
       // pipefail makes a failure of any command in a pipeline fail the whole command, and the
       // error output of the commands goes to the standard error of this script
@@ -419,26 +429,35 @@ public class ReleaseNoteCreation {
               .redirectError(ProcessBuilder.Redirect.INHERIT)
               .start();
 
-      BufferedReader result = null;
-      try (BufferedReader br =
-          new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8)); ) {
-        String processOutput = br.lines().collect(Collectors.joining(System.lineSeparator()));
-        result = new BufferedReader(new StringReader(processOutput));
-      }
+      // Read the output in another thread while waiting for the process. The process is blocked
+      // when the pipe buffer (typically 64KiB) is full, and reading the output in this thread
+      // first would block forever if the process hangs, so the timeout wouldn't apply
+      CompletableFuture<String> output =
+          CompletableFuture.supplyAsync(
+              () -> {
+                try (BufferedReader br =
+                    new BufferedReader(
+                        new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8))) {
+                  return br.lines().collect(Collectors.joining(System.lineSeparator()));
+                } catch (IOException e) {
+                  throw new UncheckedIOException(e);
+                }
+              });
 
-      boolean isTerminated = p.waitFor(PROCESS_TIME_OUT_IN_SEC, TimeUnit.SECONDS);
+      boolean isTerminated = p.waitFor(timeoutInSec, TimeUnit.SECONDS);
       if (!isTerminated) {
+        // Kill the commands in the pipeline as well as bash
+        p.descendants().forEach(ProcessHandle::destroyForcibly);
+        p.destroyForcibly();
         throw new RuntimeException(
-            format(
-                "WARN: Process was exceeded timeout(%d sec). command: %s%n",
-                PROCESS_TIME_OUT_IN_SEC, command));
+            format("Process exceeded the timeout (%d sec). command: %s", timeoutInSec, command));
       }
       if (p.exitValue() != 0) {
         throw new RuntimeException(
             format("Command failed with exit code %d. command: %s", p.exitValue(), command));
       }
 
-      return result;
+      return new BufferedReader(new StringReader(output.get(timeoutInSec, TimeUnit.SECONDS)));
     }
 
     private boolean isValidCategory(String category) {
