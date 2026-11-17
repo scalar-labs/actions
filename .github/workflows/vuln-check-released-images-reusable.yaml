@@ -11,7 +11,7 @@ on:
   workflow_call:
     inputs:
       images:
-        description: "JSON string representing a list of pairs of names and image base names of Docker images. For example, if `'[[\"ScalarDL Ledger\", \"scalar-ledger\"], [\"ScalarDL Auditor\", \"scalar-auditor\"]]'` is specified, the scanner will scan `ghcr.io/scalar-labs/scalar-ledger:<tag>` and `ghcr.io/scalar-labs/scalar-auditor:<tag>`. Every image must have at least one released version that is equal to or greater than `min-version`. Otherwise, the workflow fails without scanning any image. An image base name must start with a lowercase alphanumeric character and consist of lowercase alphanumeric characters, `.`, `_`, `/` and `-`."
+        description: "JSON string representing a list of pairs of names and image base names of Docker images. For example, if `'[[\"ScalarDL Ledger\", \"scalar-ledger\"], [\"ScalarDL Auditor\", \"scalar-auditor\"]]'` is specified, the scanner will scan `ghcr.io/scalar-labs/scalar-ledger:<tag>` and `ghcr.io/scalar-labs/scalar-auditor:<tag>`. Every image must have at least one released version that is equal to or greater than `min-version`. Otherwise, the workflow fails without scanning any image. A name must not contain double quotes, backslashes, `<`, `>`, `&` and control characters, since it is embedded in the Slack message. An image base name must start with a lowercase alphanumeric character and consist of lowercase alphanumeric characters, `.`, `_`, `/` and `-`."
         required: true
         type: string
       min-version:
@@ -102,12 +102,17 @@ jobs:
             fail "The max-targets input must be an integer between 1 and 256."
           fi
 
-          # `images` must be a list of pairs of non-empty strings. The image base names are restricted to
-          # the characters that are safe to embed in the failure reason. `\A` and `\z` are used instead of
-          # `^` and `$`, since `$` also matches just before a trailing newline.
-          if ! jq -e 'type == "array" and length > 0 and all(.[]; type == "array" and length == 2 and all(.[]; type == "string" and length > 0) and (.[1] | test("\\A[a-z0-9][a-z0-9._/-]*\\z")))' <<< "$IMAGES" > /dev/null; then
+          # `images` must be a list of pairs of non-empty strings.
+          #
+          # The names are embedded in the Slack payload of the `vuln-check` job in the same way as the failure
+          # reason. Therefore, the characters that break the payload (see the comment of `fail`) and control
+          # characters are rejected here. Otherwise, the notification of a detected vulnerability would be lost.
+          #
+          # The image base names are restricted to the characters that are safe to embed in the failure reason.
+          # `\A` and `\z` are used instead of `^` and `$`, since `$` also matches just before a trailing newline.
+          if ! jq -e 'type == "array" and length > 0 and all(.[]; type == "array" and length == 2 and all(.[]; type == "string" and length > 0) and (.[0] | test("[\"\\\\<>&\\p{Cc}]") | not) and (.[1] | test("\\A[a-z0-9][a-z0-9._/-]*\\z")))' <<< "$IMAGES" > /dev/null; then
             echo "images: $IMAGES"
-            fail "The images input must be a JSON list of pairs of a name and an image base name. An image base name must start with a lowercase alphanumeric character and consist of lowercase alphanumeric characters, dots, underscores, slashes and hyphens."
+            fail "The images input must be a JSON list of pairs of a name and an image base name. A name must not contain double quotes, backslashes, angle brackets, ampersands and control characters. An image base name must start with a lowercase alphanumeric character and consist of lowercase alphanumeric characters, dots, underscores, slashes and hyphens."
           fi
 
           # The same check as the one in `find_latest_patch_tags`. It's done here as well to report the reason.
