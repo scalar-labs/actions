@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+set -e -o pipefail; [[ -n "$DEBUG" ]] && set -x
+
+if [[ $# -ne 2 ]]; then
+    echo "usage: $0 org image_name" >&2
+    exit 1
+fi
+
+org=$1
+image_name=$2
+
+# A package name can contain slashes (e.g., `foo/bar`), which must be URL-encoded in the API path
+encoded_image_name=$(jq -rn --arg s "$image_name" '$s | @uri')
+
+# Get all tags of the container image in GitHub Packages by following subsequent pages using --paginate option.
+# Untagged versions (e.g., per-platform manifests of a multi-arch image) have an empty `tags` array and are dropped here.
+#
+# Output:
+#
+# ```
+# 3.10.1
+# v3.10.1
+# 3.10.0
+#    :
+# 4.0.0-SNAPSHOT
+# ```
+gh api --paginate "/orgs/${org}/packages/container/${encoded_image_name}/versions?per_page=100" \
+    --jq '.[].metadata.container.tags[]'

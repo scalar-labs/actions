@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+
+set -e -o pipefail; [[ -n "$DEBUG" ]] && set -x
+
+# Reads image tags from stdin (one per line) and prints the tag of the latest patch version
+# for each minor version that is equal to or greater than `min_version`.
+#
+# - Only tags in the form of `X.Y.Z` or `vX.Y.Z` are taken into account. Other tags
+#   (e.g., `latest`, `4.0.0-SNAPSHOT`, `3.10`) are ignored.
+# - If both `X.Y.Z` and `vX.Y.Z` exist for the same version, the one without `v` is chosen.
+# - The original tag (with or without `v`) is printed as is, so it can be used to pull the image.
+#
+# - `min_version` must be in the form of `vX.Y`. The `v` prefix is unrelated to whether
+#   the tags have it or not.
+#
+# For instance, if `min_version` is `v3.9` and the tags are
+# - 3.8.12
+# - 3.9.9
+# - v3.9.10
+# - 3.10.0
+# - 3.10.1
+# - v3.10.1
+# - 4.0.0-SNAPSHOT
+#
+# the output will be as follows
+#
+# ```
+# v3.9.10
+# 3.10.1
+# ```
+
+if [[ $# -ne 1 ]]; then
+    echo "usage: $0 min_version < tags" >&2
+    exit 1
+fi
+
+# The `v` prefix is mandatory. A value without it looks like a number in YAML, so an unquoted
+# value (e.g., `min-version: 3.10`) could be turned into a different version (`3.1`) before it
+# reaches this script. With the prefix, the value is always a string.
+if [[ ! $1 =~ ^v[0-9]+\.[0-9]+$ ]]; then
+    echo "min_version must be in the form of 'vX.Y' (e.g., 'v3.10'), but got '$1'" >&2
+    exit 1
+fi
+
+min_version=${1#v}
+
+awk -v min="$min_version" '
+BEGIN {
+    split(min, m, ".")
+}
+/^v?[0-9]+\.[0-9]+\.[0-9]+$/ {
+    tag = $0
+    version = $0
+    sub(/^v/, "", version)
+    split(version, p, ".")
+    # `+ 0` makes the values numbers explicitly, so that they are compared numerically and
+    # a leading zero (e.g., `09`) does not produce a different key.
+    # NOTE: This awk program is single-quoted. Do not use an apostrophe in it, even in a comment.
+    major = p[1] + 0; minor = p[2] + 0; patch = p[3] + 0
+
+    if (major < m[1] + 0 || (major == m[1] + 0 && minor < m[2] + 0)) next
+
+    key = major "." minor
+    if (!(key in latest_patch) || patch > latest_patch[key] || (patch == latest_patch[key] && tag !~ /^v/)) {
+        latest_patch[key] = patch
+        latest_tag[key] = tag
+    }
+}
+END {
+    # The order of `for (key in ...)` is unspecified. So the minor version is printed as a sort key and removed after sorting.
+    for (key in latest_tag) print key, latest_tag[key]
+}
+' | sort -V | cut -d' ' -f2

@@ -1,0 +1,258 @@
+name: Vulnerability Check for Released Images
+
+# Scans container images that have already been pushed to GitHub Packages (ghcr.io).
+# For each image, the latest patch version of every minor version that is equal to or
+# greater than `min-version` is scanned.
+#
+# Unlike `vuln-check-reusable.yaml`, this workflow doesn't build the images. It scans
+# the released images as they are.
+
+on:
+  workflow_call:
+    inputs:
+      images:
+        description: "JSON string representing a list of pairs of names and image base names of Docker images. For example, if `'[[\"ScalarDL Ledger\", \"scalar-ledger\"], [\"ScalarDL Auditor\", \"scalar-auditor\"]]'` is specified, the scanner will scan `ghcr.io/scalar-labs/scalar-ledger:<tag>` and `ghcr.io/scalar-labs/scalar-auditor:<tag>`. Every image must have at least one released version that is equal to or greater than `min-version`. Otherwise, the workflow fails without scanning any image. A name must not contain double quotes, backslashes, `<`, `>`, `&` and control characters, since it is embedded in the Slack message. An image base name must start with a lowercase alphanumeric character and consist of lowercase alphanumeric characters, `.`, `_`, `/` and `-`."
+        required: true
+        type: string
+      min-version:
+        description: 'Minimum minor version to scan in the form of `vX.Y` (e.g., `v3.12`). The `v` prefix is mandatory regardless of whether the image tags have it or not. The latest patch version of each minor version that is equal to or greater than this version is scanned.'
+        required: true
+        type: string
+      max-targets:
+        description: 'Maximum number of images to scan (the number of pairs of an image and a tag). If the number of the resolved targets exceeds this value, the workflow fails without scanning any image. It helps to notice that `min-version` is outdated. It must be between 1 and 256, which is the maximum number of jobs in a matrix.'
+        required: false
+        type: number
+        default: 50
+    secrets:
+      GPR_USERNAME:
+        description: 'Username for authenticating to GitHub Package Registry (GPR). It is required even if all the images are public.'
+        required: true
+      GPR_PASSWORD:
+        description: 'Personal access token used to authenticate to GitHub Package Registry (GPR). It needs the `read:packages` scope and access to all the images to be scanned. It is required even if all the images are public.'
+        required: true
+      SLACK_SECURITY_WEBHOOK_URL:
+        description: 'Slack webhook URL to post a message when the vulnerability check fails or the target images cannot be resolved. In the latter case, the reason for the failure is also posted. If empty, the workflow will not post a message.'
+        required: false
+
+jobs:
+  resolve-targets:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    outputs:
+      targets: ${{ steps.resolve.outputs.targets }}
+
+    steps:
+      # The `secrets` context can't be referenced in `if` of a step. So the result of this step is used instead.
+      - name: Check if Slack webhook URL is set
+        id: slack-webhook
+        env:
+          SLACK_SECURITY_WEBHOOK_URL: ${{ secrets.SLACK_SECURITY_WEBHOOK_URL }}
+        run: |
+          if [[ -n "$SLACK_SECURITY_WEBHOOK_URL" ]]; then
+            echo "Slack webhook URL is set. Post a message if resolving the target images fails."
+            echo "enabled=true" >> $GITHUB_OUTPUT
+          else
+            echo "Slack webhook URL is not set. Skip posting a message."
+            echo "enabled=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout vuln-check scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: scalar-labs/actions
+          sparse-checkout: vuln-check-script
+          # The scripts always come from the main branch, regardless of the ref of this workflow that the caller specifies.
+          # To test changes to the scripts before merging them, change this ref temporarily.
+          ref: main
+          path: vuln-check
+
+      - id: resolve
+        name: Resolve the latest patch version of each minor version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GPR_PASSWORD }}
+          SCRIPT_PATH: ./vuln-check/vuln-check-script
+          OWNER: scalar-labs
+          IMAGES: ${{ inputs.images }}
+          MIN_VERSION: ${{ inputs.min-version }}
+          MAX_TARGETS: ${{ inputs.max-targets }}
+        run: |
+          set -euo pipefail
+
+          # Fails the step with the given reason. The reason is also written to the step output
+          # so that the Slack notification can include it.
+          #
+          # The reason is embedded in a double-quoted YAML string of the Slack payload, and the text is
+          # Slack mrkdwn. Therefore, it must be a single line and must not contain double quotes or
+          # backslashes (YAML), or `<`, `>` and `&` (control characters of mrkdwn). Don't embed
+          # anything other than numbers, the validated `min-version`, and the validated image base names.
+          fail() {
+            echo "::error::$1"
+            echo "failure-reason=$1" >> "$GITHUB_OUTPUT"
+            exit 1
+          }
+
+          # A matrix can't have more than 256 jobs.
+          # `10#` forces base 10. Without it, a value with a leading zero (e.g., `050`) is treated as octal.
+          if [[ ! $MAX_TARGETS =~ ^[0-9]+$ ]] || (( 10#$MAX_TARGETS < 1 || 10#$MAX_TARGETS > 256 )); then
+            echo "max-targets: $MAX_TARGETS"
+            fail "The max-targets input must be an integer between 1 and 256."
+          fi
+
+          # `images` must be a list of pairs of non-empty strings.
+          #
+          # The names are embedded in the Slack payload of the `vuln-check` job in the same way as the failure
+          # reason. Therefore, the characters that break the payload (see the comment of `fail`) and control
+          # characters are rejected here. Otherwise, the notification of a detected vulnerability would be lost.
+          #
+          # The image base names are restricted to the characters that are safe to embed in the failure reason.
+          # `\A` and `\z` are used instead of `^` and `$`, since `$` also matches just before a trailing newline.
+          #
+          # `-s` and `length == 1` require exactly one JSON document. Without them, an input with multiple
+          # documents (e.g., one list per line) would pass as long as the last one is valid, since `jq -e`
+          # takes its exit status from the last output only.
+          if ! jq -e -s 'length == 1 and (.[0] | type == "array" and length > 0 and all(.[]; type == "array" and length == 2 and all(.[]; type == "string" and length > 0) and (.[0] | test("[\"\\\\<>&\\p{Cc}]") | not) and (.[1] | test("\\A[a-z0-9][a-z0-9._/-]*\\z"))))' <<< "$IMAGES" > /dev/null; then
+            echo "images: $IMAGES"
+            fail "The images input must be a JSON list of pairs of a name and an image base name. A name must not contain double quotes, backslashes, angle brackets, ampersands and control characters. An image base name must start with a lowercase alphanumeric character and consist of lowercase alphanumeric characters, dots, underscores, slashes and hyphens."
+          fi
+
+          # The same check as the one in `find_latest_patch_tags`. It's done here as well to report the reason.
+          if [[ ! $MIN_VERSION =~ ^v[0-9]+\.[0-9]+$ ]]; then
+            echo "min-version: $MIN_VERSION"
+            fail "The min-version input must be in the form of vX.Y, for example v3.10."
+          fi
+
+          targets='[]'
+          images_without_target=()
+          count=$(jq 'length' <<< "$IMAGES")
+          for ((i = 0; i < count; i++)); do
+            name=$(jq -r --argjson i "$i" '.[$i][0]' <<< "$IMAGES")
+            image=$(jq -r --argjson i "$i" '.[$i][1]' <<< "$IMAGES")
+            # The two scripts aren't connected with a pipe, so that a failure of fetching the tags can be reported with its own reason
+            all_tags=$(bash "$SCRIPT_PATH/fetch_ghcr_image_tags" "$OWNER" "$image") \
+              || fail "Failed to fetch the tags of ghcr.io/$OWNER/$image. The package may not exist, or the token may not have access to it."
+            tags=$(bash "$SCRIPT_PATH/find_latest_patch_tags" "$MIN_VERSION" <<< "$all_tags")
+            if [[ -z $tags ]]; then
+              # Don't fail here to report all the images without a target at once
+              echo "No released version at or above $MIN_VERSION is found for ghcr.io/$OWNER/$image"
+              images_without_target+=("ghcr.io/$OWNER/$image")
+              continue
+            fi
+            for tag in $tags; do
+              echo "Target: ghcr.io/$OWNER/$image:$tag"
+              targets=$(jq -c --arg name "$name" --arg image "$image" --arg tag "$tag" \
+                '. + [{name: $name, image: $image, tag: $tag}]' <<< "$targets")
+            done
+          done
+
+          # Every image in `images` must be scanned. Otherwise, an image that no longer has a release
+          # at or above `min-version` would silently drop out of the scan.
+          if (( ${#images_without_target[@]} > 0 )); then
+            joined=$(printf '%s, ' "${images_without_target[@]}")
+            fail "No released version at or above $MIN_VERSION is found for the following images: ${joined%, }"
+          fi
+
+          target_count=$(jq 'length' <<< "$targets")
+
+          # This isn't expected to happen with the checks above. However, an empty matrix would make the
+          # workflow scan nothing without any notification, so it's checked here as the last line of defense.
+          if (( target_count == 0 )); then
+            fail "No target image was resolved."
+          fi
+
+          if (( target_count > 10#$MAX_TARGETS )); then
+            fail "The number of the target images ($target_count) exceeds max-targets ($MAX_TARGETS). Raise min-version to drop unsupported versions, or increase max-targets."
+          fi
+
+          echo "targets=$targets" >> "$GITHUB_OUTPUT"
+
+      # If this job fails, no image is scanned at all. Notify it with the reason so that the missing scan doesn't go unnoticed.
+      # `failure-reason` is empty if the job fails without going through `fail` in the `resolve` step (e.g., a checkout failure or a failure of `find_latest_patch_tags`).
+      - name: Post failure of resolving the target images
+        if: failure() && steps.slack-webhook.outputs.enabled == 'true'
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
+        with:
+          webhook: ${{ secrets.SLACK_SECURITY_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: ":octagonal_sign: The vulnerability check for the released images on `${{ github.repository }}` <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|failed> before scanning. No image was scanned because the target images couldn't be resolved. Reason: ${{ steps.resolve.outputs.failure-reason || 'Unknown. See the run log.' }}"
+
+  vuln-check:
+    name: ${{ matrix.target.name }} (${{ matrix.target.tag }})
+
+    runs-on: ubuntu-latest
+
+    needs: resolve-targets
+
+    permissions:
+      contents: read
+
+    strategy:
+      matrix:
+        target: ${{ fromJSON(needs.resolve-targets.outputs.targets) }}
+      fail-fast: false
+      max-parallel: 1
+
+    # A failed scan doesn't fail the workflow run. Detected vulnerabilities are reported only via Slack and the log of each job.
+    continue-on-error: true
+
+    env:
+      IMAGE_REF: ghcr.io/scalar-labs/${{ matrix.target.image }}:${{ matrix.target.tag }}
+
+    steps:
+      - name: Check if Slack webhook URL is set
+        id: slack-webhook
+        env:
+          SLACK_SECURITY_WEBHOOK_URL: ${{ secrets.SLACK_SECURITY_WEBHOOK_URL }}
+        run: |
+          if [[ -n "$SLACK_SECURITY_WEBHOOK_URL" ]]; then
+            echo "Slack webhook URL is set. Post a message if the vulnerability check fails."
+            echo "enabled=true" >> $GITHUB_OUTPUT
+          else
+            echo "Slack webhook URL is not set. Skip posting a message."
+            echo "enabled=false" >> $GITHUB_OUTPUT
+          fi
+
+      # Trivy pulls the image directly from the registry with the credentials stored in the Docker config by this step.
+      #
+      # Don't pass the credentials to Trivy via `TRIVY_USERNAME` and `TRIVY_PASSWORD` instead. They aren't scoped to
+      # ghcr.io, so Trivy would also send them to the other registries it contacts (e.g., mirror.gcr.io, from which
+      # it downloads the vulnerability database). The credentials in the Docker config are used only for ghcr.io.
+      # https://trivy.dev/docs/v0.70/guide/advanced/private-registries/#passing-credentials
+      - name: Log in to ghcr.io
+        env:
+          GPR_USERNAME: ${{ secrets.GPR_USERNAME }}
+          GPR_PASSWORD: ${{ secrets.GPR_PASSWORD }}
+        run: echo "$GPR_PASSWORD" | docker login ghcr.io --username "$GPR_USERNAME" --password-stdin
+
+      - name: Run Trivy vulnerability scanner for ${{ matrix.target.name }} ${{ matrix.target.tag }}
+        # To address the following security issue, this action is pinned to a full commit SHA instead of a tag.
+        # https://github.com/aquasecurity/trivy/security/advisories/GHSA-69fq-xp46-6x23
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_REF }}
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+          timeout: '60m'
+
+      - name: Post Trivy vulnerability check failure for ${{ matrix.target.name }} ${{ matrix.target.tag }}
+        if: failure() && steps.slack-webhook.outputs.enabled == 'true'
+        uses: slackapi/slack-github-action@dcb1066f776dd043e64d0e8ba94ca15cc7e1875d # v4.0.0
+        with:
+          webhook: ${{ secrets.SLACK_SECURITY_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: ":octagonal_sign: The vulnerability check for ${{ matrix.target.name }} on `${{ github.repository }}` <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|failed> with the released image `${{ env.IMAGE_REF }}`"
