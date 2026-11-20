@@ -209,14 +209,22 @@ jobs:
             echo "enabled=false" >> $GITHUB_OUTPUT
           fi
 
+      # Trivy pulls the image directly from the registry with the credentials stored in the Docker config by this step.
+      #
+      # Don't pass the credentials to Trivy via `TRIVY_USERNAME` and `TRIVY_PASSWORD` instead. They aren't scoped to
+      # ghcr.io, so Trivy would also send them to the other registries it contacts (e.g., mirror.gcr.io, from which
+      # it downloads the vulnerability database). The credentials in the Docker config are used only for ghcr.io.
+      # https://trivy.dev/docs/v0.70/guide/advanced/private-registries/#passing-credentials
+      - name: Log in to ghcr.io
+        env:
+          GPR_USERNAME: ${{ secrets.GPR_USERNAME }}
+          GPR_PASSWORD: ${{ secrets.GPR_PASSWORD }}
+        run: echo "$GPR_PASSWORD" | docker login ghcr.io --username "$GPR_USERNAME" --password-stdin
+
       - name: Run Trivy vulnerability scanner for ${{ matrix.target.name }} ${{ matrix.target.tag }}
         # To address the following security issue, this action is pinned to a full commit SHA instead of a tag.
         # https://github.com/aquasecurity/trivy/security/advisories/GHSA-69fq-xp46-6x23
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        env:
-          # Trivy pulls the image directly from the registry with these credentials
-          TRIVY_USERNAME: ${{ secrets.GPR_USERNAME }}
-          TRIVY_PASSWORD: ${{ secrets.GPR_PASSWORD }}
         with:
           image-ref: ${{ env.IMAGE_REF }}
           format: 'table'
