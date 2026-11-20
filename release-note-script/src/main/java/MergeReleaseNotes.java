@@ -1,6 +1,9 @@
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
 import java.io.FileReader;
+import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -28,7 +31,9 @@ public class MergeReleaseNotes {
   private static final String SECTION_SUMMARY = "Summary";
 
   private static final Pattern PATTERN_CATEGORY = Pattern.compile("^## *(\\p{Print}+) *$");
-  private static final Pattern PATTERN_RELEASE_NOTE_TEXT = Pattern.compile("^ *- *(\\p{Print}+)$");
+  // UNICODE_CHARACTER_CLASS makes \p{Print} match non-ASCII characters such as "é" and "—"
+  private static final Pattern PATTERN_RELEASE_NOTE_TEXT =
+      Pattern.compile("^ *- *(\\p{Print}+)$", Pattern.UNICODE_CHARACTER_CLASS);
   private static final Pattern PATTERN_RELEASE_NOTE_TEXT_SPLIT_PRNUMBER =
       Pattern.compile("(.*) +(\\((#[0-9]+ *)+\\))$");
 
@@ -43,6 +48,10 @@ public class MergeReleaseNotes {
         System.exit(0);
       }
     }
+
+    // Write the release note in UTF-8 regardless of the locale of the runner
+    System.setOut(
+        new PrintStream(new FileOutputStream(FileDescriptor.out), true, StandardCharsets.UTF_8));
 
     MergeReleaseNotes mergeReleaseNotes = new MergeReleaseNotes();
     mergeReleaseNotes.createMergedReleaseNote();
