@@ -110,7 +110,11 @@ jobs:
           #
           # The image base names are restricted to the characters that are safe to embed in the failure reason.
           # `\A` and `\z` are used instead of `^` and `$`, since `$` also matches just before a trailing newline.
-          if ! jq -e 'type == "array" and length > 0 and all(.[]; type == "array" and length == 2 and all(.[]; type == "string" and length > 0) and (.[0] | test("[\"\\\\<>&\\p{Cc}]") | not) and (.[1] | test("\\A[a-z0-9][a-z0-9._/-]*\\z")))' <<< "$IMAGES" > /dev/null; then
+          #
+          # `-s` and `length == 1` require exactly one JSON document. Without them, an input with multiple
+          # documents (e.g., one list per line) would pass as long as the last one is valid, since `jq -e`
+          # takes its exit status from the last output only.
+          if ! jq -e -s 'length == 1 and (.[0] | type == "array" and length > 0 and all(.[]; type == "array" and length == 2 and all(.[]; type == "string" and length > 0) and (.[0] | test("[\"\\\\<>&\\p{Cc}]") | not) and (.[1] | test("\\A[a-z0-9][a-z0-9._/-]*\\z"))))' <<< "$IMAGES" > /dev/null; then
             echo "images: $IMAGES"
             fail "The images input must be a JSON list of pairs of a name and an image base name. A name must not contain double quotes, backslashes, angle brackets, ampersands and control characters. An image base name must start with a lowercase alphanumeric character and consist of lowercase alphanumeric characters, dots, underscores, slashes and hyphens."
           fi
@@ -152,6 +156,13 @@ jobs:
           fi
 
           target_count=$(jq 'length' <<< "$targets")
+
+          # This isn't expected to happen with the checks above. However, an empty matrix would make the
+          # workflow scan nothing without any notification, so it's checked here as the last line of defense.
+          if (( target_count == 0 )); then
+            fail "No target image was resolved."
+          fi
+
           if (( target_count > 10#$MAX_TARGETS )); then
             fail "The number of the target images ($target_count) exceeds max-targets ($MAX_TARGETS). Raise min-version to drop unsupported versions, or increase max-targets."
           fi
