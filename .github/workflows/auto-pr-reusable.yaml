@@ -7,6 +7,11 @@ on:
         required: true
         type: string
         description: 'The base name of the projects used in the repository. For example, "ScalarDB" if projects are named "ScalarDB <version>"'
+      support_branch_is_default_branch:
+        required: false
+        type: boolean
+        default: false
+        description: 'Set to true when the repository has no separate support branch (e.g., "3") and the default branch plays that role. If true, a project "<project_base_name> X.Y.0" is mapped to the default branch instead of the branch "X"'
 
 env:
   TERM: dumb
@@ -40,6 +45,7 @@ jobs:
         working-directory: repo
         env:
           SCRIPT_PATH: ../auto-pr/auto-pr-script
+          SUPPORT_BRANCH_IS_DEFAULT_BRANCH: ${{ inputs.support_branch_is_default_branch }}
         run: |
           assignee=$($SCRIPT_PATH/fetch_gh_user_info "${{ github.event.repository.owner.login }}" "${{ github.event.repository.name }}" "${{ github.event.pull_request.user.login }}")
           echo -------------
