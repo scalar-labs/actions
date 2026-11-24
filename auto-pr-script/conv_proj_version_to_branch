@@ -5,6 +5,10 @@ require "set"
 default_branch = ARGV.shift
 versions = ARGV
 
+# Set to "true" when the repository has no separate support branch (e.g., "3")
+# and the default branch plays that role instead.
+support_branch_is_default_branch = ENV["SUPPORT_BRANCH_IS_DEFAULT_BRANCH"] == "true"
+
 versions.inject(Set.new) {|acc, v|
   major_version, minor_version, patch_version = v.strip.split(".")
 
@@ -13,6 +17,12 @@ versions.inject(Set.new) {|acc, v|
       # e.g. project: "ScalarDB 4.0.0" -> branch: "master"
       #
       # This GitHub project corresponds to `main`/`master` branch.
+      acc << default_branch
+    elsif support_branch_is_default_branch
+      # e.g. project: "ScalarDL 3.15.0" -> branch: "master"
+      #
+      # This GitHub project corresponds to a support branch, but the repository
+      # has no separate support branch: the default branch is the support branch.
       acc << default_branch
     else
       # e.g. project: "ScalarDB 3.8.0" -> branch: "3"
