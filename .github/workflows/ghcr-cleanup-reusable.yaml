@@ -1,0 +1,259 @@
+# The names of the workflow and of its job say "list" and "dry run" because nothing is deleted yet.
+# Rename them when the actual deletion is added.
+name: List untagged images (dry run)
+
+# Lists the untagged versions of the given ghcr.io packages of the scalar-labs organization that a
+# cleanup would delete. `packages` is a JSON array of package names, for example
+# '["scalardl-ledger", "scalardl-client"]', and each package is handled by its own job.
+#
+# Every SNAPSHOT push moves its tag and leaves the previous image behind untagged. ghcr.io never
+# collects them by itself, so this workflow is meant to delete them.
+#
+# A blanket "delete untagged" is not an option here. An image pushed by our workflows is an OCI index
+# whose platform and attestation manifests are untagged by construction; they are the image's
+# contents, and deleting them makes the tag impossible to pull. snok/container-retention-policy reads
+# the index of every tagged version and leaves its children alone, which is what makes this safe.
+# Tagged versions are never selected at all, so release tags and the live SNAPSHOT tags stay.
+#
+# For now this workflow only runs as a dry run: it lists what it would delete and deletes nothing.
+# The dry run is fixed in this file and a caller cannot turn it off. Callers should start it only
+# manually (workflow_dispatch). Add a schedule to the callers and the actual deletion to this file
+# only after a dry run has shown that the children of the tagged images are protected.
+#
+# "No child is listed for deletion" is not enough to conclude that. If the tool fails to read the
+# tagged indexes, it clears every deletion candidate of that package and still exits 0, so the log
+# lists nothing and the job is green. In the log of each package, check all of the following:
+#
+# - There is no WARN line, in particular no "Failed to fetch multi-arch manifests, skipping deletion
+#   for this package".
+# - "Protected N multi-arch child digest(s) from deletion" is there. It is logged only when N is 1
+#   or more, so it needs a tagged image whose children are older than the cut-off.
+# - "dry-run: Would have deleted ..." lines are there, and none of them is a child of a tagged image.
+#
+# The last point cannot be read off the log alone. A "Would have deleted" line shows only
+# "<package>:<untagged>" and package_version, the numeric ID of the package version; it does not
+# show the digest. Compare the two sides by digest:
+#
+# - The digest of a listed version is the "name" of that package version (needs the read:packages
+#   scope):
+#     gh api /orgs/scalar-labs/packages/container/<package>/versions/<package_version> --jq .name
+#   If the name of the package contains "/", write it as "%2F" in this path, for example
+#   "scalardl%2Fledger" for "scalardl/ledger". The tool percent-encodes the name in the same way
+#   when it calls this API (src/client/urls.rs in v3.1.0). The docker command below takes the name
+#   as it is.
+# - The digests of the children of a tagged image are the ones its index references:
+#     docker buildx imagetools inspect --raw ghcr.io/scalar-labs/<package>:<tag> | jq -r '.manifests[]?.digest'
+#
+# No digest from the first list may appear in the second, for any tagged image.
+#
+# One failure leaves no trace in the log. When a response of the GitHub API says that at most one
+# request remains in the rate limit of the token, the tool stops fetching the list of the versions
+# of the package and goes on as if the list were complete (src/client/client.rs in v3.1.0). It
+# logs no WARN line, and the children of the tagged versions that it did not fetch are not
+# protected. This only happens when the rate limit of the token is almost used up, and the
+# comparison by digest above is what catches it: a child would then be listed for deletion.
+#
+# A package with too many untagged versions cannot be cleaned up at all. The tool does not select
+# more versions than the token has requests left in its rate limit, because every deletion costs a
+# request. When the untagged versions older than the cut-off outnumber the remaining requests, it
+# stops fetching the list, logs the WARN line "Pagination was incomplete due to rate limiting.
+# Clearing untagged deletion candidates as a safety measure." and drops every candidate of the
+# package instead of deleting a part of them (src/client/client.rs and
+# src/core/select_package_versions.rs in v3.1.0). A dry run takes the same path and lists nothing.
+#
+# - The README of the tool gives the rate limit as 5000 requests per hour for a personal access
+#   token and 1000 per hour and repository for GITHUB_TOKEN. The children of the tagged images
+#   count as well; they are untagged and are taken out only after this step.
+# - Running the workflow again does not help. Nothing was deleted, so the next run stops at the
+#   same point.
+# - A longer cut-off selects fewer versions. Such a package has to be cleaned up outside this
+#   workflow first, by running the tool with a long --cut-off and shortening it step by step,
+#   until the versions older than a day fit into the rate limit. This procedure follows from the
+#   arguments of the tool and has not been tried.
+#
+# The caller chooses the token and passes it as the secret TOKEN:
+#
+#   jobs:
+#     ghcr-cleanup:
+#       uses: scalar-labs/actions/.github/workflows/ghcr-cleanup-reusable.yaml@main
+#       permissions:
+#         contents: read
+#         packages: read
+#       secrets:
+#         TOKEN: ${{ secrets.CR_PAT }}  # or ${{ secrets.GITHUB_TOKEN }}
+#       with:
+#         packages: '["scalardl-ledger", "scalardl-client"]'
+#
+# Requirements for the token, taken from the source of the tool (v3.1.0) unless noted otherwise:
+#
+# - A personal access token must be a classic one (ghp_...). The tool rejects any other format when
+#   it parses its arguments, so a fine-grained personal access token (github_pat_...) does not
+#   work.
+# - A classic personal access token must have the delete:packages scope, also for a dry run. The
+#   tool checks the scopes of the token in its first request and exits with 1 if delete:packages
+#   is not among them. The README of v3.1.0 says packages:write, which is not what the tool checks.
+# - GITHUB_TOKEN gets no such check. According to the README, the repository that runs the workflow
+#   must have the Admin role in the settings of each package (Manage Actions access). The tool
+#   cannot list the packages of the organization with it and fetches each package by its exact
+#   name, which is what `packages` holds anyway.
+# - Either token is also sent to ghcr.io to read the index of every tagged version, so it must be
+#   able to pull the packages.
+#
+# Passing GITHUB_TOKEN as a secret of a reusable workflow is documented; the GitHub documentation on
+# reusing workflows has an example that passes `token: ${{ secrets.GITHUB_TOKEN }}`:
+# https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows
+#
+# None of the following has been verified. It can only be verified by running the workflow in a
+# real caller repository, so check it in the first dry run of each caller:
+#
+# - With CR_PAT: that the secret holds a classic personal access token and that the token has the
+#   delete:packages scope. If either is not the case, the tool fails before it lists
+#   anything, with "The `token` value is not valid" or "The token does not have the scopes needed".
+# - With GITHUB_TOKEN: that a dry run passes with packages: read. The tool itself does not check
+#   the permissions of this token, so a lack of them shows up as a failed request: the job fails
+#   if the package or its versions cannot be fetched, and the WARN line "Failed to fetch multi-arch
+#   manifests" appears if ghcr.io refuses the token.
+on:
+  workflow_call:
+    inputs:
+      packages:
+        description: 'Non-empty JSON array of the names of the ghcr.io packages (container images) under the `scalar-labs` organization to process. For example, `''["scalardl-ledger", "scalardl-client"]''`. Each package is handled by its own job. A name must not appear twice. A name must consist only of lowercase letters, digits, `.`, `_`, and `-`, in one or more segments separated by `/` (for example, `scalardl-ledger` or `scalardl/ledger`). Otherwise, the job of that package fails without running the tool.'
+        required: true
+        type: string
+    secrets:
+      TOKEN:
+        description: 'Token that the tool uses to access the package versions of the `scalar-labs` organization. Pass either a classic personal access token that has the `delete:packages` scope (`secrets.CR_PAT`) or the token of the run (`secrets.GITHUB_TOKEN`). A fine-grained personal access token does not work. It must be passed explicitly; `secrets: inherit` does not set it.'
+        required: true
+
+# packages: read is for a caller that passes GITHUB_TOKEN as TOKEN; a personal access token does not
+# depend on it. The permissions of a called workflow cannot exceed those of the calling job, and
+# they cannot be made conditional, so every calling job has to grant packages: read, also the ones
+# that pass a personal access token. See
+# https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations
+#
+# packages: read is the least that a dry run can need. Whether it is enough has not been verified
+# and can only be verified by a run in a real caller repository; see the header. Deleting is
+# expected to need packages: write, which has not been verified either.
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  # `packages` is expanded into the matrix of the next job with fromJSON. If it is not valid JSON, or
+  # not a non-empty array, that expansion fails with an error that does not name the input. This job
+  # checks it first and says what is wrong. The next job needs this one, so it is skipped when the
+  # check fails.
+  #
+  # The value is passed through env, not interpolated into the script. The names themselves are
+  # checked in the next job, right before the tool runs.
+  validate-packages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Validate the packages input
+        env:
+          PACKAGES: ${{ inputs.packages }}
+        run: |
+          # --slurp wraps the input into an array of the JSON values it contains, so that an input
+          # with more than one value is rejected as well.
+          #
+          # A name must not appear twice. The jobs of the same name would share a concurrency
+          # group, which keeps only one pending job and cancels the others.
+          if ! jq --exit-status --slurp 'length == 1 and (.[0] | type == "array" and length > 0 and all(.[]; type == "string") and length == (unique | length))' <<<"$PACKAGES" >/dev/null; then
+            echo "::error::Invalid packages input. It must be a JSON array of one or more strings without duplicates, for example '[\"scalardl-ledger\", \"scalardl-client\"]'."
+            exit 1
+          fi
+
+  list-untagged-container-images:
+    needs: validate-packages
+    runs-on: ubuntu-latest
+    # A job that calls a reusable workflow cannot set timeout-minutes, so the limit has to be here.
+    # See the list of keywords that a job calling a reusable workflow can use in
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(inputs.packages) }}
+
+    # Two runs must not work on the same package of the same repository at the same time. The group
+    # is set on the job, not on the workflow, and includes the package: a group keeps only one
+    # pending job and cancels the others, so the jobs of one matrix must not share a group. In a
+    # called workflow the github context is the one of the caller, so github.repository is the
+    # caller repository and different callers do not wait for each other.
+    #
+    # - Pending jobs of a group:
+    #   https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
+    # - The contexts that jobs.<job_id>.concurrency can use (matrix is one of them):
+    #   https://docs.github.com/en/actions/reference/workflows-and-actions/contexts
+    # - The github context in a called workflow:
+    #   https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations
+    concurrency:
+      group: ghcr-cleanup-${{ github.repository }}-${{ matrix.package }}
+      cancel-in-progress: false
+
+    steps:
+      # The package name is interpolated into the args string of the next step, which is split on
+      # whitespace. A name that contains whitespace would become extra arguments to a tool that
+      # holds the token. The names come from the caller, so reject anything but the characters a
+      # package name needs. The name is passed through env, not interpolated into the script, so
+      # that it cannot be run as a part of the script.
+      #
+      # A name can have several segments separated by "/", as in "<repository>/<image>". A segment
+      # must not be empty, so a name cannot start or end with "/" or contain "//".
+      #
+      # Not verified: that the tool protects the children of the tagged images of such a package.
+      # It percent-encodes the whole name, "/" included, when it builds the ghcr.io URL of a
+      # manifest (src/registry/client.rs in v3.1.0), and it is not known whether ghcr.io accepts
+      # that. If ghcr.io does not, the tool logs the WARN line "Failed to fetch multi-arch
+      # manifests" and lists nothing for the package. Check the first dry run of such a package
+      # for it.
+      - name: Validate the package name
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          export LC_ALL=C
+          if [[ ! "$PACKAGE" =~ ^[a-z0-9._-]+(/[a-z0-9._-]+)*$ ]]; then
+            echo "::error::Invalid package name. A package name must consist only of lowercase letters, digits, '.', '_', and '-', in one or more segments separated by '/'."
+            exit 1
+          fi
+
+      # snok/container-retention-policy v3.1.0, run as its container by digest rather than through
+      # its action. The action pins only its metadata: its action.yaml starts the container by the
+      # tag v3.1.0, which can be moved, and the container holds the token. A swapped container could
+      # delete or replace a release image.
+      #
+      # The digest is the one the v3.1.0 tag pointed to on 2026-11-25. The arguments mirror the args
+      # block of that release's action.yaml, one per input. To move to a newer release, take the new
+      # tag's index digest and re-check the arguments against its action.yaml. Dependabot cannot do
+      # this; it does not update docker:// references.
+      #
+      # --image-names: one package per job, so that each package has its own log to check against
+      #   the criteria above. The tool also accepts several packages in one run as a comma-separated
+      #   list. A space-separated list cannot be written here, because the args string is split on
+      #   whitespace.
+      # --tag-selection=untagged: tagged versions are never candidates.
+      # --cut-off=1d: a push uploads the platform and attestation manifests before the index that
+      #   references them, and a run landing in between would see them unreferenced. Only versions
+      #   a day old are considered; no push takes that long.
+      # --dry-run=true: fixed for now, so no run can delete anything. The tool deletes unless it is
+      #   told not to: the default of --dry-run is false. Removing this line turns the deletion on
+      #   just as changing the value to false does.
+      - name: List untagged versions of ${{ matrix.package }} that would be deleted
+        uses: docker://ghcr.io/snok/container-retention-policy@sha256:884037f146d6ef574b61fbcc59bef490f887322e6b9dc2eefcf364cb4e9b4112
+        env:
+          RUST_LOG: container_retention_policy=INFO
+        with:
+          args: >-
+            --account=scalar-labs
+            --token=${{ secrets.TOKEN }}
+            --image-names=${{ matrix.package }}
+            --image-tags=
+            --shas-to-skip=
+            --tag-selection=untagged
+            --keep-n-most-recent=0
+            --timestamp-to-use=updated_at
+            --cut-off=1d
+            --dry-run=true
