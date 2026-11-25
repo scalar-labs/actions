@@ -110,6 +110,17 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Free up disk space on the runner
+        run: |
+          # The runner has little free disk space left for the Docker images this job builds and
+          # saves. Drop the preinstalled toolchains and Docker images. Only CodeQL is removed from
+          # /opt/hostedtoolcache, since the rest of it holds the JDKs that `actions/setup-java` set
+          # up. The images are pruned here, before this job builds its own.
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/share/swift
+          sudo docker image prune -a -f
+          df -h /
+
       - name: Docker build
         working-directory: ${{ inputs.working-directory }}
         shell: bash
