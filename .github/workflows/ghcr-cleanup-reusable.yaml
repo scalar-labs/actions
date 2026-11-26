@@ -24,6 +24,11 @@ name: List untagged images (dry run)
 # tagged indexes, it clears every deletion candidate of that package and still exits 0, so the log
 # lists nothing and the job is green. In the log of each package, check all of the following:
 #
+# - "1/M package names matched the `package-name` filters" is there. With a personal access token,
+#   M is the number of the container packages that the token can list; with GITHUB_TOKEN it is 1.
+#   "0/M" means that no package has that name or that the token cannot read the package. The tool
+#   then selects nothing and exits 0, and it logs no WARN line. This only happens with a personal
+#   access token; with GITHUB_TOKEN the same mistake fails the job.
 # - There is no WARN line, in particular no "Failed to fetch multi-arch manifests, skipping deletion
 #   for this package".
 # - "Protected N multi-arch child digest(s) from deletion" is there. It is logged only when N is 1
@@ -98,6 +103,32 @@ name: List untagged images (dry run)
 #   name, which is what `packages` holds anyway.
 # - Either token is also sent to ghcr.io to read the index of every tagged version, so it must be
 #   able to pull the packages.
+#
+# GITHUB_TOKEN is the token to use in the long run. The plan is to move every caller to it, for
+# the push of the images as well as for this workflow. A personal access token stays possible so
+# that the callers can move one at a time. These are the problems of a personal access token:
+#
+# - A name that matches no package, or a package that the user of the token cannot read, leaves
+#   the job green (see the checklist above). Once the runs are scheduled, nobody notices.
+# - A classic token with the delete:packages scope can delete every package that its user
+#   administers, and the container of the tool holds it. GITHUB_TOKEN can only delete the packages
+#   that grant the calling repository the Admin role.
+# - Its rate limit is shared by every repository and every job that uses it, and the tool decides
+#   from that limit how much it lists and deletes. The rate limit of GITHUB_TOKEN is per
+#   repository.
+# - It is a long-lived secret that is tied to one user.
+#
+# To move a caller to GITHUB_TOKEN:
+#
+# - The existing packages were created with a personal access token, so no repository has access
+#   to them yet. In the settings of each package, add the calling repository with the Admin role
+#   under "Manage Actions access". Write is enough to push; deleting needs Admin.
+# - Switch the registry login of the workflows that push the images to GITHUB_TOKEN, with
+#   packages: write on the job.
+# - Pass GITHUB_TOKEN as TOKEN to this workflow.
+#
+# See "Upgrading a workflow that accesses a registry using a personal access token" in
+# https://docs.github.com/en/packages/managing-github-packages-using-github-actions-workflows/publishing-and-installing-a-package-with-github-actions
 #
 # Passing GITHUB_TOKEN as a secret of a reusable workflow is documented; the GitHub documentation on
 # reusing workflows has an example that passes `token: ${{ secrets.GITHUB_TOKEN }}`:
